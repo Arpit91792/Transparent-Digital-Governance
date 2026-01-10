@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { useLanguage } from "@/contexts/language-context";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,9 @@ import { ApplicationCard } from "@/components/application-card";
 import { CaseCard } from "@/components/case-card";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageSelector } from "@/components/language-selector";
+import { ProfileDropdown } from "@/components/profile-dropdown";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { FileText, Plus, Search, LogOut, Shield, Clock, CheckCircle, XCircle, LayoutDashboard, ArrowRight, Gavel, AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Application, Notification } from "@shared/schema";
@@ -16,6 +20,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function CitizenDashboard() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [, setLocation] = useLocation();
 
   const { data: applications, isLoading: applicationsLoading } = useQuery<Application[]>({
@@ -84,11 +89,13 @@ export default function CitizenDashboard() {
   }, [filterStatus]);
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] selection:bg-blue-500/30 relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Wider Floating Header */}
       <header className="fixed top-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-6">
         <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <ProfileDropdown className="mr-2" />
             <div className="p-1.5 rounded-full bg-[#0071e3] shadow-lg shadow-blue-500/20">
               <Shield className="h-4 w-4 text-white" />
             </div>
@@ -99,16 +106,8 @@ export default function CitizenDashboard() {
           <div className="flex items-center gap-3">
             <NotificationBell notifications={notifications} onMarkAsRead={handleMarkAsRead} />
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+            <LanguageSelector />
             <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              className="h-8 w-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              data-testid="button-logout"
-            >
-              <LogOut className="h-4 w-4 text-slate-500" />
-            </Button>
           </div>
         </div>
       </header>
@@ -120,7 +119,7 @@ export default function CitizenDashboard() {
             Hello, {user?.fullName?.split(' ')[0]}
           </h1>
           <p className="text-lg text-[#86868b] dark:text-slate-400 font-medium">
-            Manage your applications and requests
+            {t("dashboard.welcome")}, {t("dashboard.dashboard")}
           </p>
         </div>
 
@@ -160,7 +159,7 @@ export default function CitizenDashboard() {
             </div>
             <div className="relative z-10">
               <div className="text-xl font-bold text-[#1d1d1f] dark:text-white leading-none">{stats.total}</div>
-              <div className="text-xs font-medium text-[#86868b] dark:text-slate-400 mt-1">Total</div>
+              <div className="text-xs font-medium text-[#86868b] dark:text-slate-400 mt-1">{t("dashboard.total")}</div>
             </div>
           </Card>
 
@@ -174,7 +173,7 @@ export default function CitizenDashboard() {
             </div>
             <div className="relative z-10">
               <div className="text-xl font-bold text-[#1d1d1f] dark:text-white leading-none">{stats.pending}</div>
-              <div className="text-xs font-medium text-[#86868b] dark:text-slate-400 mt-1">Pending</div>
+              <div className="text-xs font-medium text-[#86868b] dark:text-slate-400 mt-1">{t("dashboard.pending")}</div>
             </div>
           </Card>
 
@@ -188,7 +187,7 @@ export default function CitizenDashboard() {
             </div>
             <div className="relative z-10">
               <div className="text-xl font-bold text-[#1d1d1f] dark:text-white leading-none">{stats.approved}</div>
-              <div className="text-xs font-medium text-[#86868b] dark:text-slate-400 mt-1">Approved</div>
+              <div className="text-xs font-medium text-[#86868b] dark:text-slate-400 mt-1">{t("dashboard.approved")}</div>
             </div>
           </Card>
 
@@ -202,7 +201,7 @@ export default function CitizenDashboard() {
             </div>
             <div className="relative z-10">
               <div className="text-xl font-bold text-[#1d1d1f] dark:text-white leading-none">{stats.rejected}</div>
-              <div className="text-xs font-medium text-[#86868b] dark:text-slate-400 mt-1">Rejected</div>
+              <div className="text-xs font-medium text-[#86868b] dark:text-slate-400 mt-1">{t("dashboard.rejected")}</div>
             </div>
           </Card>
         </div>
@@ -257,9 +256,9 @@ export default function CitizenDashboard() {
                     <ArrowRight className="h-5 w-5 opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl font-bold tracking-tight mb-1">New Application</CardTitle>
+                    <CardTitle className="text-xl font-bold tracking-tight mb-1">{t("dashboard.submitNew")}</CardTitle>
                     <CardDescription className="text-white/90 font-medium text-xs">
-                      Start a new request
+                      {t("dashboard.applications")}
                     </CardDescription>
                   </div>
                 </CardHeader>
@@ -279,9 +278,9 @@ export default function CitizenDashboard() {
                     <ArrowRight className="h-5 w-5 text-purple-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl font-bold tracking-tight text-[#1d1d1f] dark:text-white mb-1">Track Status</CardTitle>
+                    <CardTitle className="text-xl font-bold tracking-tight text-[#1d1d1f] dark:text-white mb-1">{t("dashboard.trackApplication")}</CardTitle>
                     <CardDescription className="text-[#86868b] dark:text-slate-400 font-medium text-xs">
-                      Check existing requests
+                      {t("dashboard.applications")}
                     </CardDescription>
                   </div>
                 </CardHeader>
@@ -340,7 +339,7 @@ export default function CitizenDashboard() {
             <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm min-h-[500px]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-2">
                 <h2 className="text-xl font-bold tracking-tight text-[#1d1d1f] dark:text-white">
-                  Recent Activity
+                  {t("dashboard.applications")}
                 </h2>
                 {/* Filter Tabs */}
                 <div className="inline-flex p-1 bg-[#f5f5f7] dark:bg-slate-800 rounded-full">
@@ -356,7 +355,7 @@ export default function CitizenDashboard() {
                         }
                       `}
                     >
-                      {status}
+                      {status === "all" ? t("dashboard.all") : status === "pending" ? t("dashboard.pending") : status === "approved" ? t("dashboard.approved") : t("dashboard.rejected")}
                     </button>
                   ))}
                 </div>
@@ -379,11 +378,11 @@ export default function CitizenDashboard() {
                   <div className="p-4 rounded-full bg-[#f5f5f7] dark:bg-slate-800 mb-4">
                     <FileText className="h-8 w-8 text-[#86868b]" />
                   </div>
-                  <h3 className="text-lg font-semibold text-[#1d1d1f] dark:text-white mb-1">No activity found</h3>
+                  <h3 className="text-lg font-semibold text-[#1d1d1f] dark:text-white mb-1">{t("dashboard.noApplications")}</h3>
                   <p className="text-[#86868b] max-w-sm">
                     {filterStatus === 'all'
-                      ? "You haven't submitted any applications or cases yet."
-                      : `No activity found with status "${filterStatus}".`
+                      ? t("dashboard.noApplications")
+                      : `${t("dashboard.noApplications")} - ${filterStatus}`
                     }
                   </p>
                 </div>

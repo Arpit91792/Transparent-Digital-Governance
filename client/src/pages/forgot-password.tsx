@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { OTPModal } from "@/components/otp-modal";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function ForgotPassword() {
@@ -174,6 +175,7 @@ export default function ForgotPassword() {
 
       return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4 relative overflow-hidden">
+                  <DynamicBackground variant="subtle" />
                   <div className="fixed top-4 left-4 z-50">
                         <ThemeToggle />
                   </div>

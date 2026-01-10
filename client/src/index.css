@@ -26,6 +26,14 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.75rem;
+    
+    /* Dynamic Background Colors - Light Mode */
+    --bg-gradient-primary: 221 83% 95%;
+    --bg-gradient-secondary: 262 83% 95%;
+    --bg-gradient-accent: 330 81% 95%;
+    --bg-gradient-tertiary: 199 89% 95%;
+    --bg-blob-opacity: 0.15;
+    --bg-overlay-opacity: 0.6;
   }
 
   .dark {
@@ -48,6 +56,14 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
+    
+    /* Dynamic Background Colors - Dark Mode */
+    --bg-gradient-primary: 221 83% 15%;
+    --bg-gradient-secondary: 262 83% 15%;
+    --bg-gradient-accent: 330 81% 15%;
+    --bg-gradient-tertiary: 199 89% 15%;
+    --bg-blob-opacity: 0.08;
+    --bg-overlay-opacity: 0.4;
   }
 }
 
@@ -55,8 +71,54 @@
   * {
     @apply border-border;
   }
+  
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Optimize for 90 FPS scrolling */
+    scroll-padding-top: 80px;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+    /* Smooth font rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent text selection flash on mobile */
+    -webkit-tap-highlight-color: transparent;
+    /* Optimize scrolling performance */
+    overscroll-behavior-y: contain;
+  }
+  
+  /* GPU acceleration for smooth animations */
+  [class*="animate-"], 
+  [class*="transition"],
+  button,
+  a,
+  [class*="card"],
+  [class*="Card"] {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+  
+  /* Smooth transitions for interactive elements */
+  a, button, input, select, textarea {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Optimize button interactions */
+  button {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateZ(0);
+  }
+  
+  button:active {
+    transform: scale(0.98) translateZ(0);
   }
 }
 
@@ -75,13 +137,13 @@
 
   @keyframes blob {
     0%, 100% {
-      transform: translate(0, 0) scale(1);
+      transform: translate3d(0, 0, 0) scale(1);
     }
     33% {
-      transform: translate(30px, -50px) scale(1.1);
+      transform: translate3d(30px, -50px, 0) scale(1.1);
     }
     66% {
-      transform: translate(-20px, 20px) scale(0.9);
+      transform: translate3d(-20px, 20px, 0) scale(0.9);
     }
   }
 
@@ -94,13 +156,159 @@
     }
   }
 
+  @keyframes gradient-shift {
+    0%, 100% {
+      background-position: 0% 0%;
+    }
+    25% {
+      background-position: 100% 0%;
+    }
+    50% {
+      background-position: 100% 100%;
+    }
+    75% {
+      background-position: 0% 100%;
+    }
+  }
+
+  @keyframes color-pulse {
+    0%, 100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 0.9;
+    }
+  }
+
+  @keyframes parallax-slow {
+    0%, 100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(0, -20px, 0);
+    }
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    33% {
+      transform: translate3d(20px, -30px, 0) scale(1.05);
+    }
+    66% {
+      transform: translate3d(-20px, 20px, 0) scale(0.95);
+    }
+  }
+
   .animate-blob {
-    animation: blob 7s infinite;
+    animation: blob 7s ease-in-out infinite;
+    will-change: transform;
+    transform: translateZ(0);
   }
 
   .animate-gradient-xy {
     background-size: 200% 200%;
     animation: gradient-xy 15s ease infinite;
+    will-change: background-position;
+  }
+
+  .animate-gradient-shift {
+    background-size: 200% 200%;
+    animation: gradient-shift 20s ease infinite;
+    will-change: background-position;
+  }
+
+  .animate-color-pulse {
+    animation: color-pulse 4s ease-in-out infinite;
+    will-change: opacity;
+  }
+
+  .animate-parallax-slow {
+    animation: parallax-slow 8s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .animate-float {
+    animation: float 10s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  /* Dynamic Background Base Styles */
+  .dynamic-bg-container {
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .dynamic-bg-layer {
+    position: absolute;
+    inset: 0;
+    will-change: transform, opacity, background-position;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  .dynamic-bg-gradient {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--bg-gradient-primary) / var(--bg-overlay-opacity)),
+      hsl(var(--bg-gradient-secondary) / var(--bg-overlay-opacity)),
+      hsl(var(--bg-gradient-accent) / var(--bg-overlay-opacity)),
+      hsl(var(--bg-gradient-tertiary) / var(--bg-overlay-opacity))
+    );
+    background-size: 200% 200%;
+  }
+
+  .dynamic-bg-radial {
+    background: radial-gradient(
+      circle at var(--bg-x, 50%) var(--bg-y, 50%),
+      hsl(var(--bg-gradient-primary) / var(--bg-blob-opacity)),
+      transparent 60%
+    );
+  }
+
+  .dynamic-bg-blob {
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: var(--bg-blob-opacity);
+    will-change: transform, opacity;
+    transform: translateZ(0);
+  }
+  
+  /* Performance optimizations for 90 FPS */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+  
+  /* Smooth scroll container */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  
+  /* Optimize card hover effects */
+  [class*="Card"] {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, box-shadow;
+  }
+  
+  /* Reduce motion for users who prefer it */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   .animation-delay-2000 {
@@ -137,5 +345,21 @@
 
   .animation-delay-10000 {
     animation-delay: 10s;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .fadeInUp {
+    animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: transform, opacity;
   }
 }

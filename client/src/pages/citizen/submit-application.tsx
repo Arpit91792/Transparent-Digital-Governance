@@ -12,6 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Shield, ArrowLeft, FileText, Upload, CheckCircle, Info, Loader, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { getSubDepartmentsForDepartment, getAllDepartmentNames } from "@shared/sub-departments";
 import { NotificationBell } from "@/components/notification-bell";
 import { useQuery } from "@tanstack/react-query";
@@ -332,7 +333,8 @@ export default function SubmitApplication() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] selection:bg-blue-500/30 relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Floating Header - Consistent with Dashboard */}
       <header className="fixed top-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-6">
         <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex items-center justify-between">

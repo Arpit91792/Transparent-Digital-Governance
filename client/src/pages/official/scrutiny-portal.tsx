@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Scale, CheckCircle2, XCircle, Eye, AlertTriangle, FileText, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -57,7 +58,8 @@ export default function ScrutinyPortal() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif]">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Navbar */}
       <nav className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">

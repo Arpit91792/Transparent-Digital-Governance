@@ -20,6 +20,10 @@ export const users = pgTable("users", {
   solvedCount: integer("solved_count").default(0),
   suspendedUntil: timestamp("suspended_until"), // Suspension expiry timestamp
   suspensionReason: text("suspension_reason"), // Reason for suspension
+  profileImage: text("profile_image"), // Profile picture (base64 encoded)
+  twoFactorEnabled: boolean("two_factor_enabled").default(false), // Two-factor authentication enabled
+  twoFactorMethod: text("two_factor_method"), // "email" or "otp"
+  language: text("language").default("en"), // Language preference: "en" or "hi"
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

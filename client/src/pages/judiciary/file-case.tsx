@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Scale, ChevronLeft, Send, Gavel, FileText, CheckCircle2, Copy, ShieldCheck, IndianRupee } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -74,7 +75,8 @@ export default function FileCase() {
 
   if (submittedCase) {
     return (
-      <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] flex items-center justify-center p-6 relative">
+        <DynamicBackground variant="subtle" />
         <Card className="max-w-md w-full border-0 shadow-2xl bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden">
           <CardContent className="pt-12 pb-8 px-8 text-center space-y-6">
             <div className="mx-auto h-24 w-24 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-6">
@@ -118,7 +120,8 @@ export default function FileCase() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif]">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Navbar */}
       <nav className="fixed top-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
         <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex justify-between items-center transition-all duration-300">

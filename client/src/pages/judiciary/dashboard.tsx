@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageSelector } from "@/components/language-selector";
+import { ProfileDropdown } from "@/components/profile-dropdown";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
+import { useAuth } from "@/contexts/auth-context";
+import { useLanguage } from "@/contexts/language-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Shield, Scale, Gavel, Play, CheckCircle2, AlertCircle, Clock, TrendingUp, Users, Menu, Search, Bell, ChevronRight, AlertTriangle, BarChart3, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +17,8 @@ import type { Judge, Case } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 
 export default function JudiciaryDashboard() {
+  const { user } = useAuth();
+  const { t } = useLanguage();
   const { toast } = useToast();
   const [isAllocating, setIsAllocating] = useState(false);
   const [allocationResults, setAllocationResults] = useState<any[]>([]);
@@ -61,11 +68,13 @@ export default function JudiciaryDashboard() {
   const allocatedCases = cases?.filter(c => c.status === "Allocated") || [];
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif]">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Navbar */}
       <nav className="fixed top-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
         <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex justify-between items-center transition-all duration-300">
           <div className="flex items-center gap-3">
+            {user && <ProfileDropdown className="mr-2" />}
             <div className="p-1.5 rounded-full bg-[#0071e3] shadow-lg shadow-blue-500/20">
               <Scale className="h-5 w-5 text-white" />
             </div>
@@ -81,10 +90,13 @@ export default function JudiciaryDashboard() {
           </div>
 
           <div className="flex items-center gap-4">
+            <LanguageSelector />
             <ThemeToggle />
-            <Button className="rounded-full bg-[#1d1d1f] dark:bg-white text-white dark:text-[#1d1d1f] hover:bg-[#1d1d1f]/90 dark:hover:bg-white/90 px-6">
-              Login
-            </Button>
+            {!user && (
+              <Button className="rounded-full bg-[#1d1d1f] dark:bg-white text-white dark:text-[#1d1d1f] hover:bg-[#1d1d1f]/90 dark:hover:bg-white/90 px-6">
+                {t("landing.login")}
+              </Button>
+            )}
           </div>
         </div>
       </nav>

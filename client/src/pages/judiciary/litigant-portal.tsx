@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { Scale, Search, Clock, Calendar, FileText, ChevronRight, Video, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Case, Hearing } from "@shared/schema";
@@ -54,7 +55,8 @@ export default function LitigantPortal() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif]">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Navbar */}
       <nav className="fixed top-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
         <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex justify-between items-center transition-all duration-300">

@@ -1922,6 +1922,200 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user profile image
+  app.put("/api/users/profile-image", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { profileImage } = req.body;
+      
+      // Allow null to remove profile image
+      if (profileImage !== null && profileImage !== undefined) {
+        if (typeof profileImage !== 'string') {
+          return res.status(400).json({ error: "Profile image must be a base64 string or null" });
+        }
+
+        // Validate base64 image format (only if not null)
+        if (profileImage && !profileImage.startsWith('data:image/')) {
+          return res.status(400).json({ error: "Invalid image format. Expected base64 data URL." });
+        }
+      }
+
+      // Update user profile image in database (can be null to remove)
+      const updatedUser = await storage.updateUser(req.user!.id, { profileImage: profileImage || null });
+      
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Don't send password in response
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Step 1: Verify current password and send OTP for password change
+  app.post("/api/users/change-password/verify", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: "Current password and new password are required" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters long" });
+      }
+
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (!user.email) {
+        return res.status(400).json({ error: "Email address is required for password change verification" });
+      }
+
+      // Verify current password
+      const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ error: "Current password is incorrect" });
+      }
+
+      // Generate and send OTP to email
+      const otp = generateOTP();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      await storage.createOTP(user.email, "email", otp, "change-password", expiresAt);
+
+      try {
+        await sendEmailOTP(user.email, otp, "change-password");
+        console.log(`[Change Password] ✅ OTP sent to ${user.email}: ${otp}`);
+      } catch (error) {
+        console.error("[Change Password] Failed to send email OTP:", error);
+        return res.status(500).json({ error: "Failed to send OTP. Please try again." });
+      }
+
+      const isDev = (process.env.NODE_ENV || "development") !== "production";
+      res.json({
+        message: "OTP sent to your email",
+        ...(isDev ? { otp } : {})
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Step 2: Verify OTP and change password
+  app.put("/api/users/change-password", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { newPassword, otp } = req.body;
+
+      if (!newPassword || !otp) {
+        return res.status(400).json({ error: "New password and OTP are required" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters long" });
+      }
+
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (!user.email) {
+        return res.status(400).json({ error: "Email address is required" });
+      }
+
+      // Verify OTP
+      const record = await storage.getLatestOTPRecord(user.email, "email", "change-password");
+      if (!record) {
+        return res.status(400).json({ error: "No OTP found. Please request a new OTP." });
+      }
+
+      if (record.verified) {
+        return res.status(400).json({ error: "OTP has already been used. Please request a new OTP." });
+      }
+
+      if (new Date() > new Date(record.expiresAt)) {
+        return res.status(400).json({ error: "OTP has expired. Please request a new OTP." });
+      }
+
+      if (record.otp !== otp) {
+        return res.status(401).json({ error: "Invalid OTP. Please try again." });
+      }
+
+      // Mark OTP as verified
+      await storage.verifyOTP(record.id);
+
+      // Hash and update new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUserPassword(user.id, hashedPassword);
+
+      res.json({ message: "Password changed successfully" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update two-factor authentication settings
+  app.put("/api/users/two-factor", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { enabled, method } = req.body;
+
+      if (enabled === undefined) {
+        return res.status(400).json({ error: "enabled field is required" });
+      }
+
+      if (enabled && !method) {
+        return res.status(400).json({ error: "method is required when enabling 2FA" });
+      }
+
+      if (enabled && method !== "email" && method !== "otp") {
+        return res.status(400).json({ error: "method must be 'email' or 'otp'" });
+      }
+
+      const updatedUser = await storage.updateUser(req.user!.id, {
+        twoFactorEnabled: enabled,
+        twoFactorMethod: enabled ? method : null,
+      });
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Don't send password in response
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update language preference
+  app.put("/api/users/language", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { language } = req.body;
+
+      if (!language || (language !== "en" && language !== "hi")) {
+        return res.status(400).json({ error: "Language must be 'en' or 'hi'" });
+      }
+
+      const updatedUser = await storage.updateUser(req.user!.id, { language });
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Don't send password in response
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
 
 
   // Get official's rating stats
@@ -2257,6 +2451,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Error fetching public ratings:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Public stats endpoint for landing page
+  app.get("/api/public/stats", async (req: Request, res: Response) => {
+    try {
+      // Get all applications across all departments
+      const allApplications = await storage.getAllApplications();
+      const totalApplications = allApplications.length;
+
+      // Calculate success rate (approved or auto-approved applications)
+      const approvedApplications = allApplications.filter(
+        app => app.status === "Approved" || app.status === "Auto-Approved"
+      ).length;
+      const calculatedSuccessRate = totalApplications > 0
+        ? Number(((approvedApplications / totalApplications) * 100).toFixed(1))
+        : 0;
+      // Default to 98% if no data or calculated rate is 0
+      const successRate = calculatedSuccessRate > 0 ? calculatedSuccessRate : 98;
+
+      // Calculate average user rating from all feedback
+      const allDepartments = await storage.getAllDepartments();
+      const allOfficials = await storage.getAllOfficials();
+      let allRatings: number[] = [];
+      
+      for (const official of allOfficials) {
+        const feedbacks = await storage.getOfficialRatings(official.id);
+        allRatings.push(...feedbacks.map(f => f.rating));
+      }
+      
+      const averageRating = allRatings.length > 0
+        ? Number((allRatings.reduce((sum, r) => sum + r, 0) / allRatings.length).toFixed(1))
+        : 0;
+
+      // Calculate average processing time (in days)
+      const completedApplications = allApplications.filter(
+        app => app.status === "Approved" || app.status === "Auto-Approved" || app.status === "Rejected"
+      ).filter(app => app.approvedAt || app.rejectedAt);
+      
+      let totalDays = 0;
+      let completedCount = 0;
+      
+      for (const app of completedApplications) {
+        const submittedDate = new Date(app.submittedAt);
+        const completedDate = new Date(app.approvedAt || app.rejectedAt || app.lastUpdatedAt);
+        const daysDiff = (completedDate.getTime() - submittedDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysDiff >= 0 && daysDiff <= 365) { // Only count reasonable processing times (up to 1 year)
+          totalDays += daysDiff;
+          completedCount++;
+        }
+      }
+      
+      const calculatedAvgTime = completedCount > 0
+        ? Number((totalDays / completedCount).toFixed(1))
+        : 0;
+      // Default to 30 days if no data or calculated time is 0
+      const avgTime = calculatedAvgTime > 0 ? calculatedAvgTime : 30;
+
+      res.json({
+        totalApplications,
+        successRate,
+        averageRating,
+        avgTime
+      });
+    } catch (error: any) {
+      console.error("Error fetching public stats:", error);
       res.status(500).json({ error: error.message });
     }
   });

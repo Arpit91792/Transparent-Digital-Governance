@@ -52,6 +52,10 @@ const UserSchema = new mongoose.Schema<User>({
   solvedCount: { type: Number, default: 0 },
   suspendedUntil: Date,
   suspensionReason: String,
+  profileImage: String,
+  twoFactorEnabled: { type: Boolean, default: false },
+  twoFactorMethod: String,
+  language: { type: String, default: "en" },
   createdAt: { type: Date, default: Date.now },
 }, { _id: false });
 

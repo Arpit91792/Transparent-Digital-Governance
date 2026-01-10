@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BlockchainHashDisplay } from "@/components/blockchain-hash";
 import { RatingComponent } from "@/components/rating-component";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -93,7 +94,8 @@ export default function ApplicationDetails() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950">
+      <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 relative">
+        <DynamicBackground variant="default" intensity="low" />
         <header className="fixed top-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-6">
           <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex items-center justify-between">
             <Skeleton className="h-8 w-32 rounded-full" />
@@ -109,7 +111,8 @@ export default function ApplicationDetails() {
 
   if (!application) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950 relative">
+        <DynamicBackground variant="subtle" />
         <Card className="rounded-[32px] border-0 shadow-sm">
           <CardContent className="pt-6 p-12 text-center">
             <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800 w-fit mx-auto mb-4">
@@ -144,7 +147,8 @@ export default function ApplicationDetails() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] selection:bg-blue-500/30 relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Floating Header */}
       <header className="fixed top-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-6">
         <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex items-center justify-between">

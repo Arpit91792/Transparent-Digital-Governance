@@ -1,12 +1,16 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth-context";
+import { useLanguage } from "@/contexts/language-context";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageSelector } from "@/components/language-selector";
+import { ProfileDropdown } from "@/components/profile-dropdown";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import {
   Table,
   TableBody,
@@ -81,7 +85,7 @@ function ApplicationRowWithCitizen({
           className="rounded-full hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
         >
           <Eye className="h-4 w-4 mr-1" />
-          Details
+                          {t("admin.viewDetails")}
         </Button>
       </TableCell>
     </TableRow>
@@ -90,6 +94,7 @@ function ApplicationRowWithCitizen({
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
@@ -213,11 +218,13 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif]">
+    <div className="flex flex-col h-screen w-full bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Floating Navbar */}
       <nav className="fixed top-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
         <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex justify-between items-center transition-all duration-300">
           <div className="flex items-center gap-4">
+            <ProfileDropdown className="mr-2" />
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
                 A
@@ -250,10 +257,9 @@ export default function AdminDashboard() {
 
           <div className="flex items-center gap-2">
             <NotificationBell notifications={notifications} onMarkAsRead={handleMarkAsRead} />
+            <LanguageSelector />
             <ThemeToggle />
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-[#86868b]">
-              <LogOut className="h-5 w-5" />
-            </Button>
+            <ProfileDropdown className="mr-2" />
             <Button variant="ghost" size="icon" className="md:hidden rounded-full text-[#1d1d1f] dark:text-white">
               <Menu className="h-5 w-5" />
             </Button>
@@ -270,10 +276,10 @@ export default function AdminDashboard() {
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                   <h1 className="text-3xl md:text-4xl font-bold text-[#1d1d1f] dark:text-white tracking-tight">
-                    Select Department
+                    {t("admin.departmentStats")}
                   </h1>
                   <p className="text-[#86868b] mt-2 text-lg">
-                    Choose a department to view details and manage applications
+                    {t("admin.departmentStats")}
                   </p>
                 </div>
               </div>
@@ -322,14 +328,14 @@ export default function AdminDashboard() {
                       onClick={() => setSelectedDepartment(null)}
                       className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
-                      ← Back to Departments
+                      ← {t("common.back")}
                     </Button>
                   </div>
                   <h1 className="text-3xl md:text-4xl font-bold text-[#1d1d1f] dark:text-white tracking-tight">
                     {selectedDepartment.split('–')[0].trim()}
                   </h1>
                   <p className="text-[#86868b] mt-2 text-lg">
-                    Department Overview & Management
+                    {t("admin.departmentStats")}
                   </p>
                 </div>
               </div>
@@ -337,11 +343,11 @@ export default function AdminDashboard() {
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {[
-                  { title: "Total Applications", value: departmentDetails?.stats.totalApplications || 0, icon: FileText, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
-                  { title: "Solved", value: departmentDetails?.stats.solved || 0, icon: CheckCircle, color: "text-green-600", bg: "bg-green-50 dark:bg-green-900/20" },
-                  { title: "Pending", value: departmentDetails?.stats.pending || 0, icon: Clock, color: "text-yellow-600", bg: "bg-yellow-50 dark:bg-yellow-900/20" },
-                  { title: "Approved", value: departmentDetails?.stats.approved || 0, icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
-                  { title: "Rejected", value: departmentDetails?.stats.rejected || 0, icon: XCircle, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
+                  { title: t("admin.totalApplications"), value: departmentDetails?.stats.totalApplications || 0, icon: FileText, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
+                  { title: t("admin.solvedCount"), value: departmentDetails?.stats.solved || 0, icon: CheckCircle, color: "text-green-600", bg: "bg-green-50 dark:bg-green-900/20" },
+                  { title: t("admin.pendingCount"), value: departmentDetails?.stats.pending || 0, icon: Clock, color: "text-yellow-600", bg: "bg-yellow-50 dark:bg-yellow-900/20" },
+                  { title: t("admin.approvedCount"), value: departmentDetails?.stats.approved || 0, icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
+                  { title: t("admin.rejectedCount"), value: departmentDetails?.stats.rejected || 0, icon: XCircle, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
                 ].map((stat, i) => (
                   <div key={i} className="group relative border-0 overflow-hidden bg-gradient-to-br from-white via-slate-50/50 to-slate-100/50 dark:from-slate-900 dark:via-slate-800/50 dark:to-slate-900/50 p-6 rounded-[32px] shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
                     <div className="absolute inset-0 bg-gradient-to-br from-slate-400/5 to-slate-400/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -363,15 +369,15 @@ export default function AdminDashboard() {
               {/* Officials List */}
               <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800">
-                  <h2 className="text-xl font-bold text-[#1d1d1f] dark:text-white">Department Officials</h2>
-                  <p className="text-sm text-[#86868b]">Click on an official to view details</p>
+                  <h2 className="text-xl font-bold text-[#1d1d1f] dark:text-white">{t("admin.officials")}</h2>
+                  <p className="text-sm text-[#86868b]">{t("admin.viewDetails")}</p>
                 </div>
 
                 <div className="p-6">
                   {departmentDetails?.officials.length === 0 ? (
                     <div className="text-center py-12">
                       <Users className="h-12 w-12 text-slate-200 dark:text-slate-800 mx-auto mb-4" />
-                      <p className="text-[#86868b] font-medium">No officials found in this department</p>
+                      <p className="text-[#86868b] font-medium">{t("dashboard.noApplications")}</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -432,14 +438,14 @@ export default function AdminDashboard() {
               {/* Solved Applications */}
               <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800">
-                  <h2 className="text-xl font-bold text-[#1d1d1f] dark:text-white">Solved Applications</h2>
-                  <p className="text-sm text-[#86868b]">{departmentDetails?.applications.solved.length || 0} applications marked as solved</p>
+                  <h2 className="text-xl font-bold text-[#1d1d1f] dark:text-white">{t("admin.solvedCount")} {t("dashboard.applications")}</h2>
+                  <p className="text-sm text-[#86868b]">{departmentDetails?.applications.solved.length || 0} {t("dashboard.applications")}</p>
                 </div>
                 <div className="p-6">
                   {departmentDetails?.applications.solved.length === 0 ? (
                     <div className="text-center py-8">
                       <CheckCircle className="h-10 w-10 text-slate-200 dark:text-slate-800 mx-auto mb-2" />
-                      <p className="text-[#86868b]">No solved applications</p>
+                      <p className="text-[#86868b]">{t("dashboard.noApplications")}</p>
                     </div>
                   ) : (
                     <Table>
@@ -471,14 +477,14 @@ export default function AdminDashboard() {
               {/* Pending Applications */}
               <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800">
-                  <h2 className="text-xl font-bold text-[#1d1d1f] dark:text-white">Pending Applications</h2>
-                  <p className="text-sm text-[#86868b]">{departmentDetails?.applications.pending.length || 0} applications pending review</p>
+                  <h2 className="text-xl font-bold text-[#1d1d1f] dark:text-white">{t("admin.pendingCount")} {t("dashboard.applications")}</h2>
+                  <p className="text-sm text-[#86868b]">{departmentDetails?.applications.pending.length || 0} {t("dashboard.applications")}</p>
                 </div>
                 <div className="p-6">
                   {departmentDetails?.applications.pending.length === 0 ? (
                     <div className="text-center py-8">
                       <Clock className="h-10 w-10 text-slate-200 dark:text-slate-800 mx-auto mb-2" />
-                      <p className="text-[#86868b]">No pending applications</p>
+                      <p className="text-[#86868b]">{t("dashboard.noApplications")}</p>
                     </div>
                   ) : (
                     <Table>
@@ -540,11 +546,11 @@ export default function AdminDashboard() {
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {[
-                { label: "Assigned", value: officialStats?.assigned || 0, color: "text-purple-600", bg: "bg-purple-50" },
-                { label: "Approved", value: officialStats?.approved || 0, color: "text-green-600", bg: "bg-green-50" },
-                { label: "Rejected", value: officialStats?.rejected || 0, color: "text-red-600", bg: "bg-red-50" },
-                { label: "Solved", value: officialStats?.solved || 0, color: "text-blue-600", bg: "bg-blue-50" },
-                { label: "Warnings", value: officialStats?.warningsSent || 0, color: "text-orange-600", bg: "bg-orange-50" },
+                { label: t("dashboard.assigned"), value: officialStats?.assigned || 0, color: "text-purple-600", bg: "bg-purple-50" },
+                { label: t("dashboard.approved"), value: officialStats?.approved || 0, color: "text-green-600", bg: "bg-green-50" },
+                { label: t("dashboard.rejected"), value: officialStats?.rejected || 0, color: "text-red-600", bg: "bg-red-50" },
+                { label: t("admin.solvedCount"), value: officialStats?.solved || 0, color: "text-blue-600", bg: "bg-blue-50" },
+                { label: t("dashboard.warnings"), value: officialStats?.warningsSent || 0, color: "text-orange-600", bg: "bg-orange-50" },
               ].map((stat, i) => (
                 <div key={i} className="bg-white dark:bg-slate-900 p-4 rounded-[24px] shadow-sm text-center">
                   <div className="text-2xl font-bold text-[#1d1d1f] dark:text-white mb-1">{stat.value}</div>
@@ -556,17 +562,17 @@ export default function AdminDashboard() {
             {/* Applications Table */}
             <div className="bg-white dark:bg-slate-900 rounded-[24px] shadow-sm overflow-hidden">
               <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-                <h3 className="font-bold text-[#1d1d1f] dark:text-white">Recent Applications</h3>
+                <h3 className="font-bold text-[#1d1d1f] dark:text-white">{t("dashboard.applications")}</h3>
               </div>
               <Table>
                 <TableHeader>
                   <TableRow className="border-b border-slate-100 dark:border-slate-800">
                     <TableHead className="text-xs font-bold uppercase text-[#86868b]">ID</TableHead>
-                    <TableHead className="text-xs font-bold uppercase text-[#86868b]">Citizen</TableHead>
-                    <TableHead className="text-xs font-bold uppercase text-[#86868b]">Status</TableHead>
-                    <TableHead className="text-xs font-bold uppercase text-[#86868b]">Rating</TableHead>
-                    <TableHead className="text-xs font-bold uppercase text-[#86868b]">Time</TableHead>
-                    <TableHead className="text-xs font-bold uppercase text-[#86868b] text-right">Details</TableHead>
+                    <TableHead className="text-xs font-bold uppercase text-[#86868b]">{t("login.citizen")}</TableHead>
+                    <TableHead className="text-xs font-bold uppercase text-[#86868b]">{t("dashboard.pending")}</TableHead>
+                    <TableHead className="text-xs font-bold uppercase text-[#86868b]">{t("landing.userRating")}</TableHead>
+                    <TableHead className="text-xs font-bold uppercase text-[#86868b]">{t("landing.avgTime")}</TableHead>
+                    <TableHead className="text-xs font-bold uppercase text-[#86868b] text-right">{t("admin.viewDetails")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -589,11 +595,11 @@ export default function AdminDashboard() {
             <div className="bg-white dark:bg-slate-900 p-6 rounded-[24px] shadow-sm border-2 border-red-50 dark:border-red-900/20">
               <h3 className="font-bold text-[#1d1d1f] dark:text-white mb-4 flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
-                Send Warning
+                {t("admin.sendWarning")}
               </h3>
               <div className="space-y-4">
                 <Textarea
-                  placeholder="Enter warning message..."
+                  placeholder={t("admin.enterWarningMessage")}
                   value={warningMessage}
                   onChange={(e) => setWarningMessage(e.target.value)}
                   className="bg-[#F5F5F7] dark:bg-slate-800 border-0 rounded-xl resize-none"
@@ -604,7 +610,7 @@ export default function AdminDashboard() {
                   disabled={!warningMessage.trim()}
                   className="w-full rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold h-12"
                 >
-                  Send Warning
+                  {t("admin.sendWarning")}
                 </Button>
               </div>
             </div>
@@ -612,7 +618,7 @@ export default function AdminDashboard() {
 
           <div className="p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 sticky bottom-0 z-10">
             <Button variant="ghost" onClick={() => setIsOfficialDetailOpen(false)} className="w-full rounded-full h-12 text-[#86868b]">
-              Close Details
+              {t("common.close")}
             </Button>
           </div>
         </DialogContent>
@@ -624,22 +630,22 @@ export default function AdminDashboard() {
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-[#1d1d1f] dark:text-white flex items-center gap-2">
               <AlertTriangle className="h-6 w-6 text-red-600" />
-              Send Warning
+              {t("admin.sendWarning")}
             </DialogTitle>
             <DialogDescription className="text-[#86868b]">
-              Send a warning to {selectedOfficial?.fullName}.
+              {t("admin.sendWarning")} {selectedOfficial?.fullName}.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Textarea
-              placeholder="Enter warning message..."
+              placeholder={t("admin.enterWarningMessage")}
               value={warningMessage}
               onChange={(e) => setWarningMessage(e.target.value)}
               className="bg-[#F5F5F7] dark:bg-slate-800 border-0 rounded-xl resize-none min-h-[120px]"
             />
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setIsWarningOpen(false)} className="rounded-full">Cancel</Button>
+            <Button variant="ghost" onClick={() => setIsWarningOpen(false)} className="rounded-full">{t("admin.cancel")}</Button>
             <Button
               onClick={handleSendWarning}
               disabled={!warningMessage.trim()}

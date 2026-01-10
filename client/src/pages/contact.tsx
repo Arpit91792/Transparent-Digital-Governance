@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, ArrowLeft, Phone, Mail, MessageCircle, Clock, MapPin, Globe } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { useAuth } from "@/contexts/auth-context";
 
 export default function Contact() {
@@ -34,7 +35,8 @@ export default function Contact() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] selection:bg-blue-500/30 relative">
+      <DynamicBackground variant="subtle" />
       {/* Floating Header */}
       <header className="fixed top-6 left-0 right-0 z-50 flex justify-center pointer-events-none px-6">
         <div className="w-full max-w-7xl bg-gradient-to-r from-white/90 via-blue-50/50 to-indigo-50/50 dark:from-slate-900/90 dark:via-blue-950/50 dark:to-indigo-950/50 backdrop-blur-xl border border-blue-200/30 dark:border-blue-900/30 shadow-lg shadow-blue-500/10 rounded-full px-6 py-3 pointer-events-auto flex items-center justify-between">

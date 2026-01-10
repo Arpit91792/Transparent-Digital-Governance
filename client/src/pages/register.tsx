@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Shield, User as UserIcon, Crown, ArrowLeft, Eye, EyeOff, FileText, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
+import { useLanguage } from "@/contexts/language-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { OTPModal } from "@/components/otp-modal";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import type { User } from "@shared/schema";
 import {
   Dialog,
@@ -27,6 +29,7 @@ import { getSubDepartmentsForDepartment, getAllDepartmentNames } from "@shared/s
 
 export default function Register() {
   const DEPARTMENTS = getAllDepartmentNames();
+  const { t } = useLanguage();
   const [, setLocation] = useLocation();
   const { setUser } = useAuth();
   const { toast } = useToast();
@@ -83,6 +86,15 @@ export default function Register() {
       return;
     }
 
+    if (formData.role === "admin" && !formData.department) {
+      toast({
+        title: "Department Required",
+        description: "Please select a department for admin registration",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -119,6 +131,21 @@ export default function Register() {
         sessionStorage.setItem("user", JSON.stringify(response.user));
         sessionStorage.setItem("token", response.token);
         setUser(response.user);
+
+        // Sync language preference: if user doesn't have language in DB but localStorage has one, sync it
+        const storedLang = localStorage.getItem("language") as "en" | "hi" | null;
+        if (storedLang && (!response.user.language || response.user.language !== storedLang)) {
+          try {
+            const updatedUser = await apiRequest("PUT", "/api/users/language", {
+              language: storedLang,
+            });
+            setUser(updatedUser);
+            sessionStorage.setItem("user", JSON.stringify(updatedUser));
+          } catch (error) {
+            // Silently fail - language will still work from localStorage
+            console.error("Failed to sync language preference:", error);
+          }
+        }
 
         toast({ title: "Registration Successful!", description: "Your account has been created" });
 
@@ -168,6 +195,21 @@ export default function Register() {
       sessionStorage.setItem("token", tokenResp.token);
       setUser(tokenResp.user);
 
+      // Sync language preference: if user doesn't have language in DB but localStorage has one, sync it
+      const storedLang = localStorage.getItem("language") as "en" | "hi" | null;
+      if (storedLang && (!tokenResp.user.language || tokenResp.user.language !== storedLang)) {
+        try {
+          const updatedUser = await apiRequest("PUT", "/api/users/language", {
+            language: storedLang,
+          });
+          setUser(updatedUser);
+          sessionStorage.setItem("user", JSON.stringify(updatedUser));
+        } catch (error) {
+          // Silently fail - language will still work from localStorage
+          console.error("Failed to sync language preference:", error);
+        }
+      }
+
       toast({ title: "Registration Complete", description: "Your account is verified and ready" });
 
       setShowOTP(false);
@@ -214,7 +256,8 @@ export default function Register() {
   // Step 1: Role Selection
   if (!selectedRole) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] p-4">
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] p-4 relative">
+        <DynamicBackground variant="subtle" />
         <div className="fixed top-6 right-6 z-50">
           <ThemeToggle />
         </div>
@@ -225,9 +268,9 @@ export default function Register() {
               <Shield className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-4xl font-bold text-[#1d1d1f] dark:text-white tracking-tight">
-              Join Accountability
+              {t("register.joinAccountability")}
             </h1>
-            <p className="text-lg text-[#86868b]">Select your role to get started</p>
+            <p className="text-lg text-[#86868b]">{t("register.selectRoleToStart")}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -236,12 +279,12 @@ export default function Register() {
               onClick={() => handleRoleSelect("citizen")}
             >
               <CardContent className="p-8 flex flex-col items-center text-center space-y-6">
-                <div className="w-20 h-20 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <UserIcon className="h-10 w-10 text-green-600" />
+                <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                  <UserIcon className="h-10 w-10 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-[#1d1d1f] dark:text-white mb-2">Citizen</h3>
-                  <p className="text-[#86868b]">Submit applications, track status, and rate services</p>
+                  <h3 className="text-xl font-bold text-[#1d1d1f] dark:text-white mb-2">{t("login.citizen")}</h3>
+                  <p className="text-[#86868b]">{t("login.citizenDesc")}</p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-[#F5F5F7] dark:bg-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <ArrowLeft className="h-5 w-5 text-[#1d1d1f] dark:text-white rotate-180" />
@@ -254,12 +297,12 @@ export default function Register() {
               onClick={() => handleRoleSelect("official")}
             >
               <CardContent className="p-8 flex flex-col items-center text-center space-y-6">
-                <div className="w-20 h-20 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <Shield className="h-10 w-10 text-[#0071e3]" />
+                <div className="w-20 h-20 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                  <Shield className="h-10 w-10 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-[#1d1d1f] dark:text-white mb-2">Official</h3>
-                  <p className="text-[#86868b]">Process applications and manage department tasks</p>
+                  <h3 className="text-xl font-bold text-[#1d1d1f] dark:text-white mb-2">{t("login.official")}</h3>
+                  <p className="text-[#86868b]">{t("login.officialDesc")}</p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-[#F5F5F7] dark:bg-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <ArrowLeft className="h-5 w-5 text-[#1d1d1f] dark:text-white rotate-180" />
@@ -272,12 +315,12 @@ export default function Register() {
               onClick={() => handleRoleSelect("admin")}
             >
               <CardContent className="p-8 flex flex-col items-center text-center space-y-6">
-                <div className="w-20 h-20 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <Crown className="h-10 w-10 text-purple-600" />
+                <div className="w-20 h-20 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                  <Crown className="h-10 w-10 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-[#1d1d1f] dark:text-white mb-2">Admin</h3>
-                  <p className="text-[#86868b]">Monitor system performance and manage users</p>
+                  <h3 className="text-xl font-bold text-[#1d1d1f] dark:text-white mb-2">{t("login.admin")}</h3>
+                  <p className="text-[#86868b]">{t("login.adminDesc")}</p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-[#F5F5F7] dark:bg-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <ArrowLeft className="h-5 w-5 text-[#1d1d1f] dark:text-white rotate-180" />
@@ -288,9 +331,9 @@ export default function Register() {
 
           <div className="text-center">
             <p className="text-[#86868b]">
-              Already have an account?{" "}
+              {t("register.alreadyHaveAccount")}{" "}
               <Link href="/login">
-                <span className="text-[#0071e3] font-semibold hover:underline cursor-pointer">Login</span>
+                <span className="text-[#0071e3] font-semibold hover:underline cursor-pointer">{t("register.login")}</span>
               </Link>
             </p>
           </div>
@@ -301,7 +344,8 @@ export default function Register() {
 
   // Step 2: Registration Form
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] p-4 relative">
+      <DynamicBackground variant="subtle" />
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
       </div>
@@ -312,9 +356,9 @@ export default function Register() {
             <Shield className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-white tracking-tight mb-2">
-            Create Account
+            {t("register.createAccount")}
           </h1>
-          <p className="text-[#86868b]">Join our smart governance platform</p>
+          <p className="text-[#86868b]">{t("register.joinPlatform")}</p>
         </div>
 
         <Card className="border-0 shadow-lg bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden">
@@ -327,7 +371,7 @@ export default function Register() {
                 className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 -ml-2 text-[#86868b]"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
+                {t("register.back")}
               </Button>
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#F5F5F7] dark:bg-slate-800">
                 {selectedRole === "citizen" && <UserIcon className="h-4 w-4 text-green-600" />}
@@ -339,11 +383,11 @@ export default function Register() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="fullName" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Full Name</Label>
+                <Label htmlFor="fullName" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.fullName")}</Label>
                 <Input
                   id="fullName"
                   type="text"
-                  placeholder="Enter your full name"
+                  placeholder={t("register.enterFullName")}
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                   required
@@ -351,11 +395,11 @@ export default function Register() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Email</Label>
+                <Label htmlFor="email" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.email")}</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
+                  placeholder={t("register.enterEmail")}
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
@@ -363,11 +407,11 @@ export default function Register() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Mobile Number</Label>
+                <Label htmlFor="phone" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.mobileNumber")}</Label>
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="Enter 10-digit number"
+                  placeholder={t("register.enter10Digit")}
                   value={formData.phone}
                   onChange={(e) => {
                     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -380,11 +424,13 @@ export default function Register() {
                 />
               </div>
 
-              {/* Department selection only for officials, not for admins */}
-              {formData.role === "official" && (
+              {/* Department selection for officials and admins */}
+              {(formData.role === "official" || formData.role === "admin") && (
                 <div className="space-y-4 p-4 rounded-2xl bg-[#F5F5F7] dark:bg-slate-800">
                   <div className="space-y-2">
-                    <Label htmlFor="department" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Department *</Label>
+                    <Label htmlFor="department" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">
+                      {t("register.department")} {formData.role === "admin" ? "*" : "*"}
+                    </Label>
                     <select
                       id="department"
                       value={formData.department}
@@ -392,7 +438,7 @@ export default function Register() {
                       className="w-full h-12 rounded-xl bg-white dark:bg-slate-900 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all px-3"
                       required
                     >
-                      <option value="">Select Department</option>
+                      <option value="">{t("register.selectDepartment")}</option>
                       {DEPARTMENTS.map((dept) => (
                         <option key={dept} value={dept}>
                           {dept}
@@ -400,9 +446,10 @@ export default function Register() {
                       ))}
                     </select>
                   </div>
+                  {/* Sub-Department selection only for officials */}
                   {formData.department && formData.role === "official" && (
                     <div className="space-y-2">
-                      <Label htmlFor="subDepartment" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Sub-Department *</Label>
+                      <Label htmlFor="subDepartment" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.subDepartment")} *</Label>
                       <select
                         id="subDepartment"
                         value={formData.subDepartment}
@@ -410,7 +457,7 @@ export default function Register() {
                         className="w-full h-12 rounded-xl bg-white dark:bg-slate-900 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all px-3"
                         required
                       >
-                        <option value="">Select Sub-Department</option>
+                        <option value="">{t("register.selectSubDepartment")}</option>
                         {getSubDepartmentsForDepartment(formData.department).map((subDept) => (
                           <option key={subDept.name} value={subDept.name}>
                             {subDept.name}
@@ -425,12 +472,12 @@ export default function Register() {
               {/* Secret Key required for both officials and admins */}
               {(formData.role === "official" || formData.role === "admin") && (
                 <div className="space-y-2">
-                  <Label htmlFor="secretKey" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Secret Key *</Label>
+                  <Label htmlFor="secretKey" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.secretKey")} *</Label>
                   <div className="relative">
                     <Input
                       id="secretKey"
                       type={showSecretKey ? "text" : "password"}
-                      placeholder={formData.role === "admin" ? "Enter Admin Secret Key" : "Enter Official Secret Key"}
+                      placeholder={formData.role === "admin" ? t("register.enterAdminSecretKey") : t("register.enterOfficialSecretKey")}
                       value={(formData as any).secretKey || ""}
                       onChange={(e) => setFormData({ ...formData, secretKey: e.target.value } as any)}
                       required
@@ -448,7 +495,7 @@ export default function Register() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="documentType" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Document Type</Label>
+                <Label htmlFor="documentType" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.documentType")}</Label>
                 <Select 
                   value={formData.documentType} 
                   onValueChange={(value) => {
@@ -459,30 +506,30 @@ export default function Register() {
                     id="documentType"
                     className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
                   >
-                    <SelectValue placeholder="Select document type" />
+                    <SelectValue placeholder={t("register.selectDocumentType")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="aadhaar">Aadhaar Card</SelectItem>
-                    <SelectItem value="pan">PAN Card</SelectItem>
-                    <SelectItem value="voter">Voter ID</SelectItem>
-                    <SelectItem value="driving">Driving License</SelectItem>
-                    <SelectItem value="passport">Passport</SelectItem>
+                    <SelectItem value="aadhaar">{t("register.aadhaarCard")}</SelectItem>
+                    <SelectItem value="pan">{t("register.panCard")}</SelectItem>
+                    <SelectItem value="voter">{t("register.voterID")}</SelectItem>
+                    <SelectItem value="driving">{t("register.drivingLicense")}</SelectItem>
+                    <SelectItem value="passport">{t("register.passport")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="aadharNumber" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">
-                  {formData.documentType === "aadhaar" && "Aadhaar Number"}
-                  {formData.documentType === "pan" && "PAN Number"}
-                  {formData.documentType === "voter" && "Voter ID Number"}
-                  {formData.documentType === "driving" && "Driving License Number"}
-                  {formData.documentType === "passport" && "Passport Number"}
+                  {formData.documentType === "aadhaar" && t("register.aadhaarNumber")}
+                  {formData.documentType === "pan" && t("register.panNumber")}
+                  {formData.documentType === "voter" && t("register.voterIDNumber")}
+                  {formData.documentType === "driving" && t("register.drivingLicenseNumber")}
+                  {formData.documentType === "passport" && t("register.passportNumber")}
                 </Label>
                 <Input
                   id="aadharNumber"
                   type="text"
-                  placeholder="Enter document number"
+                  placeholder={t("register.enterDocumentNumber")}
                   value={formData.aadharNumber}
                   onChange={(e) => {
                     let value = e.target.value;
@@ -500,11 +547,11 @@ export default function Register() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Username</Label>
+                <Label htmlFor="username" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.username")}</Label>
                 <Input
                   id="username"
                   type="text"
-                  placeholder="Choose a username"
+                  placeholder={t("register.chooseUsername")}
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   required
@@ -514,7 +561,7 @@ export default function Register() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Password</Label>
+                  <Label htmlFor="password" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.password")}</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -535,7 +582,7 @@ export default function Register() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Confirm</Label>
+                  <Label htmlFor="confirmPassword" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.confirm")}</Label>
                   <div className="relative">
                     <Input
                       id="confirmPassword"
@@ -562,15 +609,15 @@ export default function Register() {
                 className="w-full h-12 rounded-full bg-[#0071e3] hover:bg-[#0077ED] text-white font-semibold shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 mt-4"
                 disabled={isLoading}
               >
-                {isLoading ? "Creating Account..." : "Register"}
+                {isLoading ? t("register.registering") : t("register.register")}
               </Button>
             </form>
 
             <div className="mt-8 text-center">
               <p className="text-[#86868b]">
-                Already have an account?{" "}
+                {t("register.alreadyHaveAccount")}{" "}
                 <Link href="/login">
-                  <span className="text-[#0071e3] font-semibold hover:underline cursor-pointer">Login</span>
+                  <span className="text-[#0071e3] font-semibold hover:underline cursor-pointer">{t("register.login")}</span>
                 </Link>
               </p>
             </div>

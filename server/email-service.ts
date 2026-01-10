@@ -32,6 +32,10 @@ const generateOTPEmailHTML = (otp: string, purpose: string) => {
       purposeText = 'Password Reset';
       purposeDescription = 'password reset';
       break;
+    case 'change-password':
+      purposeText = 'Password Change';
+      purposeDescription = 'changing your password';
+      break;
     case 'feedback':
       purposeText = 'Rating Submission';
       purposeDescription = 'submitting your rating and feedback';
@@ -102,6 +106,9 @@ export async function sendEmailOTP(email: string, otp: string, purpose: string):
         break;
       case 'reset-password':
         subjectText = 'Password Reset Code';
+        break;
+      case 'change-password':
+        subjectText = 'Password Change Verification Code';
         break;
       case 'feedback':
         subjectText = 'Rating Submission Verification Code';

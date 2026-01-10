@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth-context";
+import { useLanguage } from "@/contexts/language-context";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApplicationCard } from "@/components/application-card";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageSelector } from "@/components/language-selector";
+import { ProfileDropdown } from "@/components/profile-dropdown";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { FileText, CheckCircle, Clock, TrendingUp, LogOut, AlertTriangle, Search, Star, Shield, Menu, Bell, ChevronRight } from "lucide-react";
@@ -19,6 +23,7 @@ import { ApplicationDetailsDialog } from "@/components/application-details-dialo
 
 export default function OfficialDashboard() {
    const { user, logout } = useAuth();
+   const { t } = useLanguage();
    const [, setLocation] = useLocation();
    const { toast } = useToast();
    const [selectedApp, setSelectedApp] = useState<Application | null>(null);
@@ -219,11 +224,13 @@ export default function OfficialDashboard() {
    }, [filterStatus]);
 
    return (
-      <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] pb-20">
+      <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] pb-20 relative">
+         <DynamicBackground variant="default" intensity="low" />
          {/* Floating Navbar */}
          <nav className="fixed top-6 left-0 right-0 z-50 flex justify-center px-6 pointer-events-none">
             <div className="w-full max-w-7xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-sm rounded-full px-6 py-3 pointer-events-auto flex justify-between items-center transition-all duration-300">
                <div className="flex items-center gap-3">
+                  <ProfileDropdown className="mr-2" />
                   <div className="p-1.5 rounded-full bg-[#0071e3] shadow-lg shadow-blue-500/20">
                      <Shield className="h-5 w-5 text-white" />
                   </div>
@@ -255,18 +262,8 @@ export default function OfficialDashboard() {
                         <AlertTriangle className="h-5 w-5" />
                      </Button>
                      <NotificationBell notifications={notifications} onMarkAsRead={handleMarkAsRead} />
+                     <LanguageSelector />
                      <ThemeToggle />
-                     <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600"
-                        onClick={() => {
-                           logout();
-                           window.location.href = "/";
-                        }}
-                     >
-                        <LogOut className="h-5 w-5" />
-                     </Button>
                   </div>
                </div>
 
@@ -339,8 +336,8 @@ export default function OfficialDashboard() {
             {/* Welcome Section */}
             <div className="flex flex-col md:flex-row justify-between items-end gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
                <div>
-                  <h1 className="text-4xl font-bold text-[#1d1d1f] dark:text-white mb-2">Dashboard</h1>
-                  <p className="text-[#86868b] text-lg">Welcome back, {user?.fullName}. Here's your daily overview.</p>
+                  <h1 className="text-4xl font-bold text-[#1d1d1f] dark:text-white mb-2">{t("official.dashboard")}</h1>
+                  <p className="text-[#86868b] text-lg">{t("official.welcomeBack")}, {user?.fullName}. {t("official.dailyOverview")}</p>
                </div>
 
                <div className="flex items-center gap-3 bg-white dark:bg-slate-900 p-1.5 rounded-full shadow-sm border border-slate-200 dark:border-slate-800">
@@ -348,7 +345,7 @@ export default function OfficialDashboard() {
                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#86868b]" />
                      <Input
                         type="search"
-                        placeholder="Search applications..."
+                        placeholder={t("official.searchApplications")}
                         className="pl-9 h-10 w-64 md:w-80 rounded-full border-none bg-transparent focus-visible:ring-0 placeholder:text-[#86868b]"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -368,11 +365,11 @@ export default function OfficialDashboard() {
                            <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 via-cyan-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30">
                               <FileText size={24} />
                            </div>
-                           <span className="text-xs font-bold px-2 py-1 rounded-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm text-[#86868b]">Total</span>
+                           <span className="text-xs font-bold px-2 py-1 rounded-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm text-[#86868b]">{t("dashboard.total")}</span>
                         </div>
                         <div>
                            <h3 className="text-3xl font-bold text-[#1d1d1f] dark:text-white mb-1">{myApps.length}</h3>
-                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">Assigned to Me</p>
+                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">{t("official.assigned")}</p>
                         </div>
                      </CardContent>
                   </Card>
@@ -387,11 +384,11 @@ export default function OfficialDashboard() {
                            <div className="p-3 rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 text-white shadow-lg shadow-orange-500/30">
                               <Clock size={24} />
                            </div>
-                           <span className="text-xs font-bold px-2 py-1 rounded-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm text-orange-600 dark:text-orange-400">Action Needed</span>
+                           <span className="text-xs font-bold px-2 py-1 rounded-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm text-orange-600 dark:text-orange-400">{t("official.pendingReview")}</span>
                         </div>
                         <div>
                            <h3 className="text-3xl font-bold text-[#1d1d1f] dark:text-white mb-1">{pendingApps.length}</h3>
-                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">Pending Review</p>
+                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">{t("official.pendingReview")}</p>
                         </div>
                      </CardContent>
                   </Card>
@@ -410,7 +407,7 @@ export default function OfficialDashboard() {
                         </div>
                         <div>
                            <h3 className="text-3xl font-bold text-[#1d1d1f] dark:text-white mb-1">{completedToday}</h3>
-                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">Completed Today</p>
+                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">{t("official.completedToday")}</p>
                         </div>
                      </CardContent>
                   </Card>
@@ -432,8 +429,8 @@ export default function OfficialDashboard() {
                            )}
                         </div>
                         <div>
-                           <h3 className="text-3xl font-bold text-[#1d1d1f] dark:text-white mb-1">30 Days</h3>
-                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">Avg. Processing Time</p>
+                           <h3 className="text-3xl font-bold text-[#1d1d1f] dark:text-white mb-1">30 {t("landing.days")}</h3>
+                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">{t("official.avgProcessingTime")}</p>
                         </div>
                      </CardContent>
                   </Card>
@@ -454,7 +451,7 @@ export default function OfficialDashboard() {
                         </div>
                         <div>
                            <h3 className="text-3xl font-bold text-[#1d1d1f] dark:text-white mb-1">{warnings.length}</h3>
-                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">Warnings Received</p>
+                           <p className="text-sm text-[#86868b] dark:text-slate-400 font-medium">{t("dashboard.warnings")}</p>
                         </div>
                      </CardContent>
                   </Card>
@@ -470,7 +467,7 @@ export default function OfficialDashboard() {
                            value="my-apps"
                            className="rounded-full px-6 py-2.5 text-sm font-medium data-[state=active]:bg-[#1d1d1f] data-[state=active]:text-white dark:data-[state=active]:bg-white dark:data-[state=active]:text-[#1d1d1f] transition-all"
                         >
-                           My Applications ({filteredMyApps.length})
+                           {t("official.allApplications")} ({filteredMyApps.length})
                         </TabsTrigger>
                      </TabsList>
                   </div>
@@ -481,9 +478,9 @@ export default function OfficialDashboard() {
                            <div className="inline-flex p-4 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 text-white shadow-lg shadow-blue-500/30 mb-4">
                               <FileText className="h-8 w-8" />
                            </div>
-                           <h3 className="text-xl font-bold text-[#1d1d1f] dark:text-white mb-2">No Applications Found</h3>
+                           <h3 className="text-xl font-bold text-[#1d1d1f] dark:text-white mb-2">{t("dashboard.noApplications")}</h3>
                            <p className="text-[#86868b] dark:text-slate-400">
-                              {filterStatus === "all" && !searchQuery ? "You haven't been assigned any applications yet." : "Try adjusting your filters or search query."}
+                              {filterStatus === "all" && !searchQuery ? t("dashboard.noApplications") : t("dashboard.noApplications")}
                            </p>
                         </div>
                      ) : (
@@ -530,17 +527,17 @@ export default function OfficialDashboard() {
                      <AlertTriangle size={32} />
                   </div>
                   <DialogTitle className="text-2xl font-bold text-red-600 mb-2">
-                     Performance Warning
+                     {t("dashboard.warnings")}
                   </DialogTitle>
                   <DialogDescription className="text-base font-medium text-[#1d1d1f] dark:text-white">
-                     Action Required: Please review the following alerts from administration.
+                     {t("dashboard.warnings")}
                   </DialogDescription>
                </div>
 
                <div className="p-6 space-y-4 max-h-[40vh] overflow-y-auto">
                   {unreadWarnings.map(warning => (
                      <div key={warning.id} className="bg-[#F5F5F7] dark:bg-slate-800 p-5 rounded-2xl">
-                        <p className="font-bold text-[#1d1d1f] dark:text-white mb-2 text-sm uppercase tracking-wider">Admin Message</p>
+                        <p className="font-bold text-[#1d1d1f] dark:text-white mb-2 text-sm uppercase tracking-wider">{t("admin.officials")} {t("common.message")}</p>
                         <p className="text-[#86868b] leading-relaxed mb-3">{warning.message}</p>
                         <p className="text-xs text-[#86868b] font-mono text-right">
                            {new Date(warning.sentAt).toLocaleString()}
@@ -554,7 +551,7 @@ export default function OfficialDashboard() {
                      className="w-full h-14 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-lg shadow-lg shadow-red-500/20 transition-all hover:scale-[1.02]"
                      onClick={handleAcknowledgeWarnings}
                   >
-                     I Understand & Acknowledge
+                     {t("common.save")}
                   </Button>
                </div>
             </DialogContent>

@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { Case, Hearing } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { DynamicBackground } from "@/components/dynamic-background-universal";
 
 const statusConfig: Record<string, { bg: string; color: string; icon: any }> = {
   "Pending": { bg: "bg-amber-100", color: "text-amber-700", icon: Clock },
@@ -32,7 +33,8 @@ export default function CaseDetails({ params }: { params: { id: string } }) {
 
   if (caseLoading) {
     return (
-      <div className="min-h-screen bg-[#F5F5F7] p-4 md:p-8">
+      <div className="min-h-screen bg-[#F5F5F7] p-4 md:p-8 relative">
+        <DynamicBackground variant="subtle" />
         <div className="max-w-5xl mx-auto space-y-6">
           <Skeleton className="h-12 w-1/3" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -52,7 +54,8 @@ export default function CaseDetails({ params }: { params: { id: string } }) {
 
   if (!caseItem) {
     return (
-      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center relative">
+        <DynamicBackground variant="subtle" />
         <div className="text-center space-y-4">
           <div className="bg-red-100 p-4 rounded-full inline-flex">
             <AlertTriangle className="h-8 w-8 text-red-600" />
@@ -68,7 +71,8 @@ export default function CaseDetails({ params }: { params: { id: string } }) {
   const StatusIcon = status.icon;
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-sans pb-20">
+    <div className="min-h-screen bg-[#F5F5F7] dark:bg-slate-950 font-sans pb-20 relative">
+      <DynamicBackground variant="default" intensity="low" />
       {/* Header */}
       <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-4 md:px-8 py-4">
