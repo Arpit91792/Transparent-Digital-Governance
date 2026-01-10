@@ -8,6 +8,7 @@ import type { User, Application } from "@shared/schema";
 import { ZodError } from "zod";
 import { sendEmailOTP, verifyEmailConfig } from "./email-service";
 import { sendSMSOTP } from "./sms-service";
+import { getSubDepartmentsForDepartment } from "@shared/sub-departments";
 
 const JWT_SECRET = process.env.SESSION_SECRET || "dev-secret-key";
 
@@ -47,6 +48,309 @@ function requireRole(...roles: string[]) {
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// ============================================================================
+// REGISTRATION REFACTORED FUNCTIONS
+// ============================================================================
+
+/**
+ * Validates that no duplicate user exists for the given data
+ * Returns error message if duplicate found, null otherwise
+ */
+async function checkForDuplicates(data: {
+  username: string;
+  email?: string | null;
+  phone?: string | null;
+  aadharNumber?: string | null;
+}): Promise<string | null> {
+  // Check username uniqueness
+  const existingUsername = await storage.getUserByUsername(data.username);
+  if (existingUsername) {
+    return "Username already exists";
+  }
+
+  // Check email uniqueness (if provided)
+  if (data.email) {
+    const existingEmail = await storage.getUserByEmail(data.email);
+    if (existingEmail) {
+      return "This email is already registered. Please use a different email or mobile number.";
+    }
+  }
+
+  // Check phone uniqueness (if provided)
+  if (data.phone) {
+    const existingPhone = await storage.getUserByPhone(data.phone);
+    if (existingPhone) {
+      return "This mobile number is already registered. Please use a different email or mobile number.";
+    }
+  }
+
+  // Check aadhar uniqueness (if provided)
+  if (data.aadharNumber) {
+    const existingAadhar = await storage.getUserByAadhar(data.aadharNumber);
+    if (existingAadhar) {
+      return "This Aadhar number is already used. Please use a different Aadhar number.";
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Validates role-specific requirements
+ * Returns error message if validation fails, null otherwise
+ */
+async function validateRoleSpecificRequirements(
+  role: string,
+  data: {
+    department?: string | null;
+    subDepartment?: string | null;
+  },
+  secretKey?: string
+): Promise<string | null> {
+  // Validate role value
+  if (!["citizen", "official", "admin"].includes(role)) {
+    return "Invalid role selected";
+  }
+
+  // Official-specific validations
+  if (role === "official") {
+    // Secret key validation
+    const expectedSecretKey = process.env.OFFICIAL_SECRET_KEY || "official@2025";
+    if (!secretKey || secretKey !== expectedSecretKey) {
+      return "Invalid Secret Key for Official registration";
+    }
+
+    // Department validation
+    if (!data.department || data.department.trim().length === 0) {
+      return "Department is required for official registration";
+    }
+
+    // Validate department exists
+    const allDepartments = await storage.getAllDepartments();
+    const departmentExists = allDepartments.some(dept => {
+      // Normalize department name (handle variations like "Health" vs "Health – Ministry...")
+      const deptName = dept.name.split('–')[0].trim();
+      const dataDeptName = data.department.split('–')[0].trim();
+      return deptName === dataDeptName;
+    });
+
+    if (!departmentExists) {
+      return `Department "${data.department}" does not exist. Please select a valid department.`;
+    }
+
+    // Sub-department validation
+    if (!data.subDepartment || data.subDepartment.trim().length === 0) {
+      return "Sub-Department is required for official registration";
+    }
+
+    // Validate sub-department belongs to department
+    const validSubDepartments = getSubDepartmentsForDepartment(data.department);
+    const subDeptExists = validSubDepartments.some(
+      subDept => subDept.name === data.subDepartment
+    );
+
+    if (!subDeptExists) {
+      return `Sub-Department "${data.subDepartment}" does not exist in "${data.department}". Please select a valid sub-department.`;
+    }
+  }
+
+  // Admin-specific validations
+  if (role === "admin") {
+    const expectedSecretKey = process.env.ADMIN_SECRET_KEY || "admin@2025";
+    if (!secretKey || secretKey !== expectedSecretKey) {
+      return "Invalid Secret Key for Admin registration";
+    }
+  }
+
+  // Citizen: no additional validations needed
+
+  return null;
+}
+
+/**
+ * Generates OTP response based on user's email/phone
+ * Returns response object with OTP details or direct token
+ */
+async function generateRegistrationResponse(
+  user: User,
+  isDev: boolean
+): Promise<{
+  user: Omit<User, "password">;
+  token?: string;
+  phone?: string;
+  email?: string;
+  otpMethod?: "phone" | "email";
+  otp?: string;
+}> {
+  const { password, ...userWithoutPassword } = user;
+
+  // Email-based OTP
+  if (user.email) {
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await storage.createOTP(user.email, "email", otp, "register", expiresAt);
+
+    try {
+      await sendEmailOTP(user.email, otp, "register");
+    } catch (error) {
+      console.error("Failed to send email OTP:", error);
+    }
+
+    console.log(`Generated register OTP for email ${user.email}: ${otp}`);
+
+    return {
+      user: userWithoutPassword,
+      email: user.email,
+      otpMethod: "email",
+      ...(isDev ? { otp } : {}),
+    };
+  }
+
+  // Phone-based OTP
+  if (user.phone) {
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await storage.createOTP(user.phone, "phone", otp, "register", expiresAt);
+
+    try {
+      await sendSMSOTP(user.phone, otp, "register");
+    } catch (error) {
+      console.error("Failed to send SMS OTP:", error);
+    }
+
+    console.log(`Generated register OTP for phone ${user.phone}: ${otp}`);
+
+    return {
+      user: userWithoutPassword,
+      phone: user.phone,
+      otpMethod: "phone",
+      ...(isDev ? { otp } : {}),
+    };
+  }
+
+  // No email/phone -> issue token immediately (edge case)
+  const token = jwt.sign(
+    { id: user.id, username: user.username, role: user.role },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
+  return {
+    user: userWithoutPassword,
+    token,
+  };
+}
+
+/**
+ * Main registration function with role-based validation
+ * Handles complete registration flow for all roles
+ */
+async function registerUser(
+  body: any,
+  isDev: boolean
+): Promise<{
+  success: boolean;
+  data?: {
+    user: Omit<User, "password">;
+    token?: string;
+    phone?: string;
+    email?: string;
+    otpMethod?: "phone" | "email";
+    otp?: string;
+  };
+  error?: string;
+  statusCode?: number;
+}> {
+  try {
+    // Step 1: Parse and validate schema
+    let data;
+    try {
+      data = insertUserSchema.parse(body);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        // Format Zod validation errors into user-friendly messages
+        const errorMessages = error.errors.map((err) => {
+          const field = err.path.join(".");
+          if (field === "email") {
+            return "Invalid email format. Please enter a valid email address.";
+          } else if (field === "phone") {
+            return "Invalid mobile number. Please enter exactly 10 digits.";
+          } else if (field === "username") {
+            return err.message || "Invalid username format.";
+          } else if (err.message.includes("email or mobile")) {
+            return "Either email or mobile number must be provided.";
+          }
+          return err.message || `Invalid ${field}`;
+        });
+        return {
+          success: false,
+          error: errorMessages[0] || "Validation failed",
+          statusCode: 400,
+        };
+      }
+      throw error;
+    }
+
+    // Step 2: Validate role-specific requirements
+    const roleValidationError = await validateRoleSpecificRequirements(
+      data.role,
+      {
+        department: data.department,
+        subDepartment: data.subDepartment,
+      },
+      body.secretKey // Get from raw body since it's not in schema
+    );
+
+    if (roleValidationError) {
+      return {
+        success: false,
+        error: roleValidationError,
+        statusCode: roleValidationError.includes("Secret Key") ? 403 : 400,
+      };
+    }
+
+    // Step 3: Check for duplicates
+    const duplicateError = await checkForDuplicates({
+      username: data.username,
+      email: data.email,
+      phone: data.phone,
+      aadharNumber: data.aadharNumber,
+    });
+
+    if (duplicateError) {
+      return {
+        success: false,
+        error: duplicateError,
+        statusCode: 400,
+      };
+    }
+
+    // Step 4: Hash password and create user
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const user = await storage.createUser({
+      ...data,
+      password: hashedPassword,
+    });
+
+    console.log(`User registered: username=${user.username}, role=${user.role}, phone=${user.phone}, email=${user.email}`);
+
+    // Step 5: Generate OTP response or direct token
+    const response = await generateRegistrationResponse(user, isDev);
+
+    return {
+      success: true,
+      data: response,
+    };
+  } catch (error: any) {
+    console.error("Registration error:", error);
+    return {
+      success: false,
+      error: error.message || "Registration failed",
+      statusCode: 400,
+    };
+  }
 }
 
 async function sendSMS(targetPhone: string, message: string) {
@@ -332,139 +636,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const isDev = (process.env.NODE_ENV || "development") !== "production";
+  
+  // Registration route - uses refactored registerUser function
   app.post("/api/auth/register", async (req: Request, res: Response) => {
-    try {
-      let data;
-      try {
-        data = insertUserSchema.parse(req.body);
-      } catch (error) {
-        if (error instanceof ZodError) {
-          // Format Zod validation errors into user-friendly messages
-          const errorMessages = error.errors.map((err) => {
-            const field = err.path.join(".");
-            if (field === "email") {
-              return "Invalid email format. Please enter a valid email address.";
-            } else if (field === "phone") {
-              return "Invalid mobile number. Please enter exactly 10 digits.";
-            } else if (field === "username") {
-              return err.message || "Invalid username format.";
-            } else if (err.message.includes("email or mobile")) {
-              return "Either email or mobile number must be provided.";
-            }
-            return err.message || `Invalid ${field}`;
-          });
-          return res.status(400).json({ error: errorMessages[0] || "Validation failed" });
-        }
-        throw error;
-      }
+    const result = await registerUser(req.body, isDev);
 
-      // Validate role
-      if (data.role && !["citizen", "official", "admin"].includes(data.role)) {
-        return res.status(400).json({ error: "Invalid role selected" });
-      }
-
-      // Verify Secret Key for Official and Admin
-      if (data.role === "official") {
-        const { secretKey } = req.body;
-        if (secretKey !== "official@2025") {
-          return res.status(403).json({ error: "Invalid Secret Key for Official registration" });
-        }
-      } else if (data.role === "admin") {
-        const { secretKey } = req.body;
-        if (secretKey !== "admin@2025") {
-          return res.status(403).json({ error: "Invalid Secret Key for Admin registration" });
-        }
-      }
-
-      const existing = await storage.getUserByUsername(data.username);
-      if (existing) {
-        return res.status(400).json({ error: "Username already exists" });
-      }
-
-      // check for duplicate email or phone
-      if (data.email) {
-        const existingEmail = await storage.getUserByEmail(data.email);
-        if (existingEmail) {
-          return res.status(400).json({ error: "This email is already registered. Please use a different email or mobile number." });
-        }
-      }
-
-      if (data.phone) {
-        const existingPhone = await storage.getUserByPhone(data.phone);
-        if (existingPhone) {
-          return res.status(400).json({ error: "This mobile number is already registered. Please use a different email or mobile number." });
-        }
-      }
-
-      if (data.aadharNumber) {
-        const existingAadhar = await storage.getUserByAadhar(data.aadharNumber);
-        if (existingAadhar) {
-          return res.status(400).json({ error: "This Aadhar number is already used. Please use a different Aadhar number." });
-        }
-      }
-
-      const hashedPassword = await bcrypt.hash(data.password, 10);
-      const user = await storage.createUser({
-        ...data,
-        password: hashedPassword,
-      });
-
-      console.log(`User registered: username=${user.username}, phone=${user.phone}, email=${user.email}`);
-
-      const { password, ...userWithoutPassword } = user;
-
-      // If email provided, use two-step verification: generate OTP and return email
-      if (user.email) {
-        const otp = generateOTP();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-        await storage.createOTP(user.email, "email", otp, "register", expiresAt);
-
-        // Send OTP via email
-        try {
-          await sendEmailOTP(user.email, otp, "register");
-        } catch (error) {
-          console.error("Failed to send email OTP:", error);
-        }
-        console.log(`Generated register OTP for email ${user.email}: ${otp}`);
-
-        return res.json({
-          user: userWithoutPassword,
-          email: user.email,
-          otpMethod: "email",
-          ...(isDev ? { otp } : {})
-        });
-      } else if (user.phone) {
-        const otp = generateOTP();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-        await storage.createOTP(user.phone, "phone", otp, "register", expiresAt);
-
-        // Send OTP via SMS
-        try {
-          await sendSMSOTP(user.phone, otp, "register");
-        } catch (error) {
-          console.error("Failed to send SMS OTP:", error);
-        }
-        console.log(`Generated register OTP for phone ${user.phone}: ${otp}`);
-
-        return res.json({
-          user: userWithoutPassword,
-          phone: user.phone,
-          otpMethod: "phone",
-          ...(isDev ? { otp } : {})
-        });
-      }
-
-      // no phone or email -> issue token immediately
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: user.role },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      res.json({ user: userWithoutPassword, token });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
+    if (!result.success) {
+      return res.status(result.statusCode || 400).json({ error: result.error });
     }
+
+    // Return response in same format as before (backward compatibility)
+    res.json(result.data);
   });
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
@@ -472,37 +654,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = loginSchema.parse(req.body);
       let user: User | undefined;
 
-      // 1. Mobile Login
-      if (data.phone) {
-        console.log(`Login attempt with phone: ${data.phone}`);
-        user = await storage.getUserByPhone(data.phone);
+      // ============================================================================
+      // METHOD 1: EMAIL + PASSWORD (PRIMARY - DIRECT LOGIN, NO OTP)
+      // ============================================================================
+      if (data.email && data.password) {
+        user = await storage.getUserByEmail(data.email);
         if (!user) {
-          console.log(`No user found for phone: ${data.phone}`);
           return res.status(401).json({ error: "Invalid credentials" });
         }
-        console.log(`User found: username=${user.username}, phone=${user.phone}`);
 
-        // If password is provided, validate it
-        if (data.password) {
-          const validPassword = await bcrypt.compare(data.password, user.password);
-          if (!validPassword) {
-            return res.status(401).json({ error: "Invalid credentials" });
-          }
+        // Verify password
+        const validPassword = await bcrypt.compare(data.password, user.password);
+        if (!validPassword) {
+          return res.status(401).json({ error: "Invalid credentials" });
         }
-        // If no password provided, proceed with OTP-only login
-
-
-        const otp = generateOTP();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-        await storage.createOTP(user.phone!, "phone", otp, "login", expiresAt);
-
-        // Send OTP via SMS
-        try {
-          await sendSMSOTP(user.phone!, otp, "login");
-        } catch (error) {
-          console.error("Failed to send SMS OTP:", error);
-        }
-        console.log(`Generated login OTP for phone ${user.phone}: ${otp}`);
 
         // Check if user is suspended
         const isSuspended = await storage.isUserSuspended(user.id);
@@ -511,55 +676,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? Math.ceil((suspendedUntil.getTime() - Date.now()) / (1000 * 60 * 60))
           : 0;
 
+        // Generate JWT token immediately (no OTP required)
+        const token = jwt.sign(
+          { id: user.id, username: user.username, role: user.role },
+          JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+
         const { password, ...userWithoutPassword } = user;
+        console.log(`User logged in via Email+Password: ${user.username} (${user.role})`);
+
         return res.json({
           user: userWithoutPassword,
-          phone: user.phone,
-          otpMethod: "phone",
+          token, // Return token directly
           suspended: isSuspended,
           suspendedUntil: user.suspendedUntil,
           hoursRemaining: hoursRemaining > 0 ? hoursRemaining : 0,
           suspensionReason: user.suspensionReason,
-          ...(isDev ? { otp } : {})
         });
       }
 
-      // 2. Username/Email Login
-      if (data.username || data.email) {
-        if (data.username) {
-          user = await storage.getUserByUsername(data.username);
-        } else if (data.email) {
-          user = await storage.getUserByEmail(data.email);
-        }
-
+      // ============================================================================
+      // METHOD 2: EMAIL + OTP (PASSWORDLESS EMAIL LOGIN)
+      // ============================================================================
+      if (data.email && !data.password) {
+        console.log(`Email OTP login attempt with email: ${data.email}`);
+        user = await storage.getUserByEmail(data.email);
         if (!user) {
-          return res.status(401).json({ error: "Invalid credentials" });
+          console.log(`No user found for email: ${data.email}`);
+          return res.status(401).json({ error: "No account found with this email" });
         }
+        console.log(`User found: username=${user.username}, email=${user.email}`);
 
-        // Password is mandatory for email/username login
-        if (!data.password) {
-          return res.status(400).json({ error: "Password is required" });
-        }
-
-        const validPassword = await bcrypt.compare(data.password, user.password);
-        if (!validPassword) {
-          return res.status(401).json({ error: "Invalid credentials" });
-        }
-
-        // Generate Email OTP for both password and passwordless login
-        if (!user.email) {
-          return res.status(400).json({ error: "User has no email for verification" });
-        }
-
+        // Generate and send OTP via email
         const otp = generateOTP();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-        await storage.createOTP(user.email, "email", otp, "login", expiresAt);
+        await storage.createOTP(user.email!, "email", otp, "login", expiresAt);
 
-        // Send OTP via email
+        // Send OTP via Email
         try {
-          await sendEmailOTP(user.email, otp, "login");
+          await sendEmailOTP(user.email!, otp, "login");
         } catch (error) {
-          console.error("Failed to send email OTP:", error);
+          console.error("Failed to send Email OTP:", error);
         }
         console.log(`Generated login OTP for email ${user.email}: ${otp}`);
 
@@ -579,11 +737,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
           suspendedUntil: user.suspendedUntil,
           hoursRemaining: hoursRemaining > 0 ? hoursRemaining : 0,
           suspensionReason: user.suspensionReason,
-          ...(isDev ? { otp } : {})
+          ...(isDev ? { otp } : {}) // Expose OTP in dev for testing
         });
       }
 
-      return res.status(400).json({ error: "Missing credentials" });
+      // ============================================================================
+      // METHOD 2: MOBILE + OTP (SECONDARY - PASSWORDLESS)
+      // ============================================================================
+      if (data.phone) {
+        if (data.password) {
+          // Mobile login is passwordless only
+          return res.status(400).json({ error: "Mobile login uses OTP only. Password not required." });
+        }
+
+        console.log(`OTP login attempt with phone: ${data.phone}`);
+        user = await storage.getUserByPhone(data.phone);
+        if (!user) {
+          console.log(`No user found for phone: ${data.phone}`);
+          return res.status(401).json({ error: "Invalid credentials" });
+        }
+        console.log(`User found: username=${user.username}, phone=${user.phone}`);
+
+        // Generate and send OTP
+        const otp = generateOTP();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        await storage.createOTP(user.phone!, "phone", otp, "login", expiresAt);
+
+        // Send OTP via SMS
+        try {
+          await sendSMSOTP(user.phone!, otp, "login");
+        } catch (error) {
+          console.error("Failed to send SMS OTP:", error);
+        }
+        console.log(`Generated login OTP for phone ${user.phone}: ${otp}`);
+
+        // Check if user is suspended (don't block OTP send, but note it)
+        const isSuspended = await storage.isUserSuspended(user.id);
+        const suspendedUntil = user.suspendedUntil ? new Date(user.suspendedUntil) : null;
+        const hoursRemaining = suspendedUntil && isSuspended
+          ? Math.ceil((suspendedUntil.getTime() - Date.now()) / (1000 * 60 * 60))
+          : 0;
+
+        const { password, ...userWithoutPassword } = user;
+        return res.json({
+          user: userWithoutPassword,
+          phone: user.phone,
+          otpMethod: "phone",
+          suspended: isSuspended,
+          suspendedUntil: user.suspendedUntil,
+          hoursRemaining: hoursRemaining > 0 ? hoursRemaining : 0,
+          suspensionReason: user.suspensionReason,
+          ...(isDev ? { otp } : {}) // Expose OTP in dev for testing
+        });
+      }
+
+      return res.status(400).json({ error: "Missing credentials. Please provide email+password, email for OTP, or phone for OTP." });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

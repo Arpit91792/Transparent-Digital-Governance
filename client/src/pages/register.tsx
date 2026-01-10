@@ -43,15 +43,34 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showSecretKey, setShowSecretKey] = useState(false);
 
-  // Check for role parameter in URL and auto-select the role
+  // Check for role parameter and error messages in URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const roleParam = params.get("role");
+    const errorParam = params.get("error");
+    const emailParam = params.get("email");
+    
     if (roleParam === "citizen" || roleParam === "official" || roleParam === "admin") {
       setSelectedRole(roleParam);
       setFormData(prev => ({ ...prev, role: roleParam }));
     }
-  }, []);
+
+    // Show error if any
+    if (errorParam) {
+      toast({
+        title: "Registration Error",
+        description: decodeURIComponent(errorParam),
+        variant: "destructive",
+      });
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname + (roleParam ? `?role=${roleParam}` : ""));
+    }
+
+    // Pre-fill email if provided
+    if (emailParam) {
+      setFormData(prev => ({ ...prev, email: decodeURIComponent(emailParam) }));
+    }
+  }, [toast]);
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -65,6 +84,48 @@ export default function Register() {
     department: "",
     subDepartment: "",
   });
+
+  /**
+   * Builds role-based registration payload.
+   * Only includes fields relevant to the selected role.
+   */
+  const buildRoleBasedPayload = (): Record<string, any> => {
+    const { confirmPassword, ...baseData } = formData;
+    const role = formData.role as "citizen" | "official" | "admin";
+    
+    // Common fields for all roles
+    const payload: Record<string, any> = {
+      username: baseData.username,
+      password: baseData.password,
+      email: baseData.email,
+      phone: baseData.phone,
+      documentType: baseData.documentType,
+      aadharNumber: baseData.aadharNumber,
+      role: role,
+    };
+
+    // For citizens: use username as fullName if fullName is not provided
+    if (role === "citizen") {
+      payload.fullName = baseData.fullName || baseData.username;
+    } else {
+      // For officials and admins: fullName is required
+      payload.fullName = baseData.fullName;
+    }
+
+    // Official-specific fields
+    if (role === "official") {
+      payload.department = baseData.department;
+      payload.subDepartment = baseData.subDepartment;
+      payload.secretKey = (formData as any).secretKey;
+    }
+
+    // Admin-specific fields
+    if (role === "admin") {
+      payload.secretKey = (formData as any).secretKey;
+    }
+
+    return payload;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,13 +159,12 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      const { confirmPassword, ...registerData } = formData;
-      const cleanedData = registerData;
+      const payload = buildRoleBasedPayload();
 
       const response = await apiRequest<{ user: User; token?: string; phone?: string; email?: string; otpMethod?: "phone" | "email"; otp?: string }>(
         "POST",
         "/api/auth/register",
-        cleanedData
+        payload
       );
 
       if (response.otp) {
@@ -128,8 +188,8 @@ export default function Register() {
       }
 
       if (response.token) {
-        sessionStorage.setItem("user", JSON.stringify(response.user));
-        sessionStorage.setItem("token", response.token);
+        localStorage.setItem("user", JSON.stringify(response.user));
+        localStorage.setItem("token", response.token);
         setUser(response.user);
 
         // Sync language preference: if user doesn't have language in DB but localStorage has one, sync it
@@ -191,8 +251,8 @@ export default function Register() {
         purpose: "register"
       });
 
-      sessionStorage.setItem("user", JSON.stringify(tokenResp.user));
-      sessionStorage.setItem("token", tokenResp.token);
+      localStorage.setItem("user", JSON.stringify(tokenResp.user));
+      localStorage.setItem("token", tokenResp.token);
       setUser(tokenResp.user);
 
       // Sync language preference: if user doesn't have language in DB but localStorage has one, sync it
@@ -382,18 +442,38 @@ export default function Register() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fullName" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.fullName")}</Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder={t("register.enterFullName")}
-                  value={formData.fullName}
-                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  required
-                  className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
-                />
-              </div>
+              {/* For Citizens: Username at top, no Full Name */}
+              {formData.role === "citizen" && (
+                <div className="space-y-2">
+                  <Label htmlFor="username" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.username")}</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder={t("register.chooseUsername")}
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    required
+                    className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
+                  />
+                </div>
+              )}
+
+              {/* For Officials/Admins: Full Name first */}
+              {(formData.role === "official" || formData.role === "admin") && (
+                <div className="space-y-2">
+                  <Label htmlFor="fullName" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.fullName")}</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder={t("register.enterFullName")}
+                    value={formData.fullName}
+                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                    required
+                    className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.email")}</Label>
                 <Input
@@ -546,18 +626,22 @@ export default function Register() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.username")}</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder={t("register.chooseUsername")}
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  required
-                  className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
-                />
-              </div>
+              {/* Username field for Officials/Admins (already shown for Citizens at top) */}
+              {(formData.role === "official" || formData.role === "admin") && (
+                <div className="space-y-2">
+                  <Label htmlFor="username" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">{t("register.username")}</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder={t("register.chooseUsername")}
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    required
+                    className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
+                  />
+                </div>
+              )}
+
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

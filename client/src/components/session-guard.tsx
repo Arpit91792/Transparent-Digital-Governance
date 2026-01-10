@@ -9,7 +9,7 @@ export function SessionGuard() {
       useEffect(() => {
             const checkSession = () => {
                   try {
-                        const storedUserStr = sessionStorage.getItem("user");
+                        const storedUserStr = localStorage.getItem("user");
                         if (!storedUserStr) return; // No session, let auth context handle it
 
                         const storedUser = JSON.parse(storedUserStr);

@@ -15,14 +15,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = sessionStorage.getItem("user");
+    // Check localStorage for persistent auth (7-day token)
+    const storedUser = localStorage.getItem("user");
+    const storedToken = localStorage.getItem("token");
+    
     if (storedUser && storedUser !== "undefined" && storedUser !== "null") {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(storedUser);
+        // Verify token exists and is valid (JWT expiry is handled by backend)
+        if (storedToken) {
+          setUser(parsedUser);
+        } else {
+          // Token missing, clear user
+          localStorage.removeItem("user");
+          setUser(null);
+        }
       } catch (e) {
-        // corrupted or invalid JSON in sessionStorage — remove and reset
-        sessionStorage.removeItem("user");
-        sessionStorage.removeItem("token");
+        // corrupted or invalid JSON in localStorage — remove and reset
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
         setUser(null);
       }
     }
@@ -31,8 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null);
-    sessionStorage.removeItem("user");
-    sessionStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
   };
 
   return (

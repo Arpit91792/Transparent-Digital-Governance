@@ -189,12 +189,24 @@ export const insertUserSchema = baseInsertUserSchema
   });
 
 export const loginSchema = z.object({
-  username: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
   password: z.string().optional(),
-  loginType: z.enum(["password", "otp"]).default("password"),
-});
+}).refine(
+  (data) => data.email || data.phone,
+  { message: "Either email or phone must be provided" }
+).refine(
+  (data) => {
+    // Login options:
+    // 1. Email + Password = direct login
+    // 2. Email only (no password) = email OTP login
+    // 3. Phone only (no password) = mobile OTP login
+    // Invalid: Phone + Password (phone is always OTP-based)
+    if (data.phone && data.password) return false;
+    return true;
+  },
+  { message: "Mobile login uses OTP only. Password not required for phone login." }
+);
 
 export const insertApplicationSchema = createInsertSchema(applications).omit({
   id: true,

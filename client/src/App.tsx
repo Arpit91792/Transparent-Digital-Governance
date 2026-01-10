@@ -28,6 +28,7 @@ import Settings from "@/pages/settings";
 import { SessionGuard } from "@/components/session-guard";
 import { ChatbotWidget } from "@/components/chatbot-widget";
 import { ErrorBoundary } from "@/components/error-boundary";
+import AuthCallback from "@/pages/auth-callback";
 
 function ProtectedRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: string[] }) {
   const { user, isLoading } = useAuth();
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/contact" component={Contact} />
       <Route path="/election/candidates" component={CandidateSelection} />
       <Route path="/judiciary" component={JudiciaryDashboard} />
