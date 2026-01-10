@@ -2,7 +2,7 @@ services:
   - type: web
     name: smart-india-project
     env: node
-    buildCommand: NODE_ENV=development npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -13,4 +13,20 @@ services:
         sync: false
       - key: PORT
         value: 5000
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: OFFICIAL_SECRET_KEY
+        sync: false
+      - key: ADMIN_SECRET_KEY
+        sync: false
 

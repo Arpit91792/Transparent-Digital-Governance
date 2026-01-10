@@ -1,18 +1,32 @@
 import nodemailer from 'nodemailer';
 
-// Email configuration
-const emailConfig = {
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER || 'at917920@gmail.com',
-    pass: process.env.SMTP_PASS || 'your-app-password',
-  },
-};
+// Function to get email configuration from environment variables
+function getEmailConfig() {
+  return {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USER || 'at917920@gmail.com',
+      pass: process.env.SMTP_PASS || 'your-app-password',
+    },
+  };
+}
 
-// Create reusable transporter (mutable so we can swap to a test account in dev)
-let transporter = nodemailer.createTransport(emailConfig);
+// Create transporter function that reads config dynamically
+function createTransporter() {
+  const config = getEmailConfig();
+  console.log('📧 Creating email transporter with:', {
+    host: config.host,
+    port: config.port,
+    user: config.auth.user,
+    pass: config.auth.pass ? '***' + config.auth.pass.slice(-4) : 'NOT SET'
+  });
+  return nodemailer.createTransport(config);
+}
+
+// Create reusable transporter (recreated on each use to get fresh env vars)
+let transporter = createTransporter();
 
 // Email templates
 const generateOTPEmailHTML = (otp: string, purpose: string) => {
@@ -95,6 +109,9 @@ const generateOTPEmailHTML = (otp: string, purpose: string) => {
  * Send OTP via email
  */
 export async function sendEmailOTP(email: string, otp: string, purpose: string): Promise<void> {
+  // Recreate transporter to get fresh environment variables
+  transporter = createTransporter();
+  
   try {
     let subjectText = 'Verification Code';
     switch (purpose) {
@@ -115,8 +132,9 @@ export async function sendEmailOTP(email: string, otp: string, purpose: string):
         break;
     }
 
+    const config = getEmailConfig();
     const mailOptions = {
-      from: `"Digital Governance" <${emailConfig.auth.user}>`,
+      from: `"Digital Governance" <${config.auth.user}>`,
       to: email,
       subject: subjectText,
       html: generateOTPEmailHTML(otp, purpose),
@@ -124,6 +142,7 @@ export async function sendEmailOTP(email: string, otp: string, purpose: string):
     };
 
     console.log(`📧 Attempting to send OTP email for ${purpose} to: ${email}`);
+    console.log(`📤 Sending from: ${config.auth.user}`);
     const info = await transporter.sendMail(mailOptions);
     console.log(`✅ Email OTP sent successfully to ${email} for ${purpose}`);
     // If using Ethereal (dev test account), log preview URL
@@ -133,18 +152,26 @@ export async function sendEmailOTP(email: string, otp: string, purpose: string):
     }
   } catch (error: any) {
     console.error('❌ Failed to send email OTP:', error);
-    console.error('Error details:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
     if (error.code === 'EAUTH') {
       console.error('🔐 Email authentication failed. Please check your SMTP credentials in the .env file.');
-      console.error('💡 Ensure you are using an App Password if using Gmail.');
+      console.error('💡 For Gmail, ensure you are using an App Password (not your regular password).');
+      console.error('💡 Generate App Password at: https://myaccount.google.com/apppasswords');
+      console.error('💡 Make sure 2-Step Verification is enabled on your Google account.');
     } else if (error.code === 'ECONNECTION') {
       console.error('🌐 Connection failed. Check your internet connection and SMTP settings.');
+      console.error(`💡 Verify SMTP_HOST=${process.env.SMTP_HOST} and SMTP_PORT=${process.env.SMTP_PORT}`);
+    } else if (error.code === 'EENVELOPE') {
+      console.error('📧 Envelope error. Check FROM_EMAIL and recipient email address.');
+    } else {
+      console.error('🔍 Full error details:', JSON.stringify(error, null, 2));
     }
     // In development, log the OTP to console as fallback
     if (process.env.NODE_ENV !== 'production') {
       console.log(`🔑 DEV MODE - OTP for ${email}: ${otp}`);
     }
-    throw new Error('Failed to send email. Please try again.');
+    throw new Error(`Failed to send email: ${error.message || 'Unknown error'}`);
   }
 }
 
@@ -152,17 +179,50 @@ export async function sendEmailOTP(email: string, otp: string, purpose: string):
  * Verify email configuration
  */
 export async function verifyEmailConfig(): Promise<boolean> {
+  // Recreate transporter to get fresh environment variables
+  transporter = createTransporter();
+  
   try {
+    console.log('🔍 Verifying email configuration...');
+    const config = getEmailConfig();
+    
+    // Check if required env vars are set
+    if (!config.auth.user || config.auth.user === 'at917920@gmail.com' || config.auth.user.includes('@example.com')) {
+      console.warn('⚠️  SMTP_USER not properly configured in .env file');
+    }
+    if (!config.auth.pass || config.auth.pass === 'your-app-password') {
+      console.warn('⚠️  SMTP_PASS not properly configured in .env file');
+      console.warn('💡 For Gmail, you need an App Password (not your regular password)');
+    }
+    
     await transporter.verify();
-    console.log('Email server is ready to send messages');
+    console.log('✅ Email server is ready to send messages');
+    console.log(`📧 SMTP configured: ${config.auth.user} via ${config.host}:${config.port}`);
     return true;
-  } catch (error) {
-    console.error('Email server verification failed:', error);
+  } catch (error: any) {
+    console.error('❌ Email server verification failed:', error.message || error);
+    console.error('Error code:', error.code);
+    
+    if (error.code === 'EAUTH') {
+      console.error('🔐 Authentication failed. Common issues:');
+      console.error('   1. Wrong App Password (for Gmail, use App Password, not regular password)');
+      console.error('   2. App Password might be expired or revoked');
+      console.error('   3. 2-Step Verification not enabled on Google account');
+      console.error('   4. SMTP_USER or SMTP_PASS incorrect in .env file');
+      console.error('💡 Generate new App Password: https://myaccount.google.com/apppasswords');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('🌐 Connection failed. Check:');
+      console.error('   1. Internet connection');
+      console.error('   2. SMTP_HOST and SMTP_PORT in .env file');
+      console.error('   3. Firewall blocking port 587 or 465');
+    } else {
+      console.error('🔍 Full error:', JSON.stringify(error, null, 2));
+    }
 
     // In development, automatically create an Ethereal test account as a safe fallback
     if (process.env.NODE_ENV !== 'production') {
       try {
-        console.log('Creating Ethereal test account for local email testing...');
+        console.log('🔄 Creating Ethereal test account for local email testing...');
         const testAccount = await nodemailer.createTestAccount();
         transporter = nodemailer.createTransport({
           host: testAccount.smtp.host,
@@ -173,10 +233,12 @@ export async function verifyEmailConfig(): Promise<boolean> {
             pass: testAccount.pass,
           },
         });
-        console.log('Ethereal test account created. Emails will be previewable via a URL in the console.');
+        console.log('✅ Ethereal test account created. Emails will be previewable via a URL in the console.');
+        console.log('⚠️  Note: Using test account because SMTP configuration failed.');
+        console.log('⚠️  To use real email, fix your SMTP credentials in .env and restart server.');
         return true;
-      } catch (err) {
-        console.error('Failed to create Ethereal test account:', err);
+      } catch (err: any) {
+        console.error('❌ Failed to create Ethereal test account:', err.message || err);
       }
     }
 
