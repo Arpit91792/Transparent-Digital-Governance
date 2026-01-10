@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Shield, Bell, Award, Clock, CheckCircle, Star, Phone, Mail, CheckCircle2, ChevronRight, ArrowRight, Activity, Users, Building2, Search, Menu } from "lucide-react";
+import { FileText, Shield, Bell, Award, Clock, CheckCircle, Star, Phone, Mail, CheckCircle2, ChevronRight, ArrowRight, Activity, Users, Building2, Search, Menu, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
 import { useQuery } from "@tanstack/react-query";
@@ -161,16 +161,30 @@ export default function Landing() {
               <Bell className="h-5 w-5" />
             </Button>
             <ThemeToggle />
-            <Link href="/register">
-              <Button variant="outline" className="rounded-full border-slate-200 dark:border-slate-700 hover:bg-[#F5F5F7] dark:hover:bg-slate-800 text-[#1d1d1f] dark:text-white px-6 ml-2">
-                Get Started
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button className="rounded-full bg-[#0071e3] hover:bg-[#0077ED] text-white shadow-lg shadow-blue-500/20 px-6 ml-2">
-                Login
-              </Button>
-            </Link>
+            {user ? (
+              // Show profile icon and redirect to appropriate dashboard
+              <Link href={user.role === "admin" ? "/admin/dashboard" : user.role === "official" ? "/official/dashboard" : "/citizen/dashboard"}>
+                <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-[#1d1d1f] dark:text-white">
+                  <div className="h-8 w-8 rounded-full bg-[#0071e3] flex items-center justify-center">
+                    <User className="h-4 w-4 text-white" />
+                  </div>
+                </Button>
+              </Link>
+            ) : (
+              // Show Login/Get Started buttons when not logged in
+              <>
+                <Link href="/register">
+                  <Button variant="outline" className="rounded-full border-slate-200 dark:border-slate-700 hover:bg-[#F5F5F7] dark:hover:bg-slate-800 text-[#1d1d1f] dark:text-white px-6 ml-2">
+                    Get Started
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button className="rounded-full bg-[#0071e3] hover:bg-[#0077ED] text-white shadow-lg shadow-blue-500/20 px-6 ml-2">
+                    Login
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}

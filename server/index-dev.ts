@@ -1,3 +1,5 @@
+import 'dotenv/config'; // Load .env file FIRST
+
 import fs from "node:fs";
 import path from "node:path";
 import { type Server } from "node:http";
@@ -33,6 +35,11 @@ export async function setupVite(app: Express, server: Server) {
 
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
+    // Skip API routes - let them be handled by Express routes registered before this
+    if (req.originalUrl.startsWith("/api")) {
+      return next();
+    }
+
     const url = req.originalUrl;
 
     try {
