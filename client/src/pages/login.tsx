@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Phone, Mail, User as UserIcon, Crown, ArrowLeft, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Shield, Mail, User as UserIcon, Crown, ArrowLeft, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
@@ -12,38 +12,55 @@ import { apiRequest } from "@/lib/queryClient";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { OTPModal } from "@/components/otp-modal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { SiGoogle } from "react-icons/si";
 import type { User } from "@shared/schema";
 
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { setUser } = useAuth();
+  const { user, setUser } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [showOTP, setShowOTP] = useState(false);
   const [selectedRole, setSelectedRole] = useState<"citizen" | "official" | "admin" | null>(null);
   const [loginRole, setLoginRole] = useState<"citizen" | "official" | "admin">("citizen");
   const [tempUser, setTempUser] = useState<{ user: User; phone?: string; email?: string; otpMethod?: "phone" | "email" } | null>(null);
-  const [activeTab, setActiveTab] = useState("mobile");
+  const [activeTab, setActiveTab] = useState("email");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Check for role parameter in URL and auto-select the role
+  // Check for role parameter, error messages, and email pre-fill
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const roleParam = params.get("role");
+    const errorParam = params.get("error");
+    const emailParam = params.get("email");
+    
     if (roleParam === "citizen" || roleParam === "official" || roleParam === "admin") {
       setSelectedRole(roleParam);
       setLoginRole(roleParam);
     }
-  }, []);
+
+    // Pre-fill email if provided
+    if (emailParam) {
+      setFormData(prev => ({ ...prev, email: decodeURIComponent(emailParam) }));
+      setActiveTab("email");
+    }
+
+    // Show error if any
+    if (errorParam) {
+      toast({
+        title: "Authentication Failed",
+        description: decodeURIComponent(errorParam),
+        variant: "destructive",
+      });
+      // Clean URL
+      window.history.replaceState({}, "", "/login" + (roleParam ? `?role=${roleParam}` : ""));
+    }
+  }, [toast]);
 
   const [formData, setFormData] = useState({
-    username: "",
+    email: "",
     password: "",
     phone: "",
-    email: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,44 +70,87 @@ export default function Login() {
     try {
       let payload: any = {};
 
-      if (activeTab === "mobile") {
-        if (!formData.phone) throw new Error("Please enter your mobile number");
-        // Password is optional for mobile login (OTP based)
-        payload = { phone: formData.phone, password: formData.password };
+      if (activeTab === "emailOtp") {
+        // Email OTP login (passwordless)
+        if (!formData.email) throw new Error("Please enter your email address");
+        payload = { email: formData.email }; // No password - triggers email OTP
       } else {
-        // Email/Username tab
-        if (!formData.username && !formData.email) throw new Error("Please enter username or email");
+        // Email + Password login (direct, no OTP)
+        if (!formData.email) throw new Error("Please enter your email address");
         if (!formData.password) throw new Error("Please enter your password");
+        payload = { email: formData.email, password: formData.password };
+      }
 
-        // Check if input is email or username
-        if (formData.username.includes("@")) {
-          payload = { email: formData.username, password: formData.password };
+      const response = await apiRequest<{
+        user: User;
+        token?: string; // Present for email+password login
+        phone?: string;
+        email?: string;
+        otpMethod?: "phone" | "email";
+        otp?: string; // Present for OTP login
+        suspended?: boolean;
+        suspendedUntil?: string;
+        hoursRemaining?: number;
+        suspensionReason?: string;
+      }>("POST", "/api/auth/login", payload);
+
+      // ============================================================================
+      // EMAIL + PASSWORD: Direct login (token returned immediately)
+      // ============================================================================
+      if (response.token) {
+        // Email+Password login successful - log in directly
+        localStorage.setItem("user", JSON.stringify(response.user));
+        localStorage.setItem("token", response.token);
+        setUser(response.user);
+
+        // Check for suspension
+        if (response.suspended) {
+          const hoursRemaining = response.hoursRemaining || 0;
+          toast({
+            title: "Account Suspended",
+            description: `You have reached the maximum submission limit for this department. Your account is temporarily suspended for 24 hours. ${hoursRemaining > 0 ? `${hoursRemaining} hours remaining.` : ''}`,
+            variant: "destructive",
+            duration: 10000,
+          });
         } else {
-          payload = { username: formData.username, password: formData.password };
+          toast({ title: "Welcome back!", description: "Logged in successfully" });
         }
+
+        // Navigate based on role
+        const userRole = response.user.role;
+        if (userRole === "admin") {
+          setLocation("/admin/dashboard");
+        } else if (userRole === "official") {
+          setLocation("/official/dashboard");
+        } else {
+          setLocation("/citizen/dashboard");
+        }
+
+        // Clear form
+        setFormData({ email: "", password: "", phone: "" });
+        return;
       }
 
-      const response = await apiRequest<{ user: User; phone?: string; email?: string; otpMethod?: "phone" | "email"; otp?: string }>(
-        "POST",
-        "/api/auth/login",
-        payload
-      );
+      // ============================================================================
+      // EMAIL OTP: Show OTP modal for email verification
+      // ============================================================================
+      if (response.otpMethod === "email" && response.email) {
+        if (response.otp) {
+          (window as any).LAST_OTP = response.otp;
+          console.log("OTP exposed for testing:", response.otp);
+        }
+        setTempUser(response);
+        setShowOTP(true);
 
-      if (response.otp) {
-        (window as any).LAST_OTP = response.otp;
-        console.log("OTP exposed for testing:", response.otp);
+        toast({
+          title: "OTP Sent Successfully",
+          description: "An OTP has been sent to your email address. Please check your inbox (and spam folder).",
+        });
+        return;
       }
-      setTempUser(response);
-      setShowOTP(true);
 
-      const otpMessage = response.otpMethod === "email"
-        ? "We've sent an OTP to your email. Kindly check your inbox (and spam folder) and enter the OTP to log in."
-        : "An OTP has been sent to your registered mobile number. Please enter it to continue.";
-
-      toast({
-        title: "OTP Sent Successfully",
-        description: otpMessage,
-      });
+      // Fallback error
+      throw new Error("Unexpected response from server");
     } catch (error: any) {
       toast({
         title: "Login Failed",
@@ -124,8 +184,8 @@ export default function Login() {
       );
 
       // persist auth and update context
-      sessionStorage.setItem("user", JSON.stringify(tokenResp.user));
-      sessionStorage.setItem("token", tokenResp.token);
+      localStorage.setItem("user", JSON.stringify(tokenResp.user));
+      localStorage.setItem("token", tokenResp.token);
       setUser(tokenResp.user);
 
       // Check for suspension
@@ -144,12 +204,13 @@ export default function Login() {
       // close OTP modal and clear temp state
       setShowOTP(false);
       setTempUser(null);
-      setFormData({ username: "", password: "", phone: "", email: "" });
+      setFormData({ email: "", password: "", phone: "" });
 
-      // Navigate based on selected login role
-      if (loginRole === "admin") {
+      // Navigate based on actual user role from database
+      const userRole = tokenResp.user.role;
+      if (userRole === "admin") {
         setLocation("/admin/dashboard");
-      } else if (loginRole === "official") {
+      } else if (userRole === "official") {
         setLocation("/official/dashboard");
       } else {
         setLocation("/citizen/dashboard");
@@ -163,11 +224,6 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Redirect to Google Auth endpoint
-    // Note: This requires backend configuration for Google OAuth
-    window.location.href = "/api/auth/google";
-  };
 
   const handleRoleSelect = (role: "citizen" | "official" | "admin") => {
     setSelectedRole(role);
@@ -176,7 +232,7 @@ export default function Login() {
 
   const handleBackToRoleSelection = () => {
     setSelectedRole(null);
-    setFormData({ username: "", password: "", phone: "", email: "" });
+    setFormData({ email: "", password: "", phone: "" });
   };
 
   // Step 1: Role Selection
@@ -271,13 +327,15 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950 font-['Outfit',sans-serif] p-4">
       <div className="fixed top-6 right-6 z-50 flex items-center gap-3">
-        <Button
-          variant="outline"
-          onClick={() => setLocation("/register")}
-          className="rounded-full border-slate-200 dark:border-slate-700 hover:bg-[#F5F5F7] dark:hover:bg-slate-800 text-[#1d1d1f] dark:text-white font-medium"
-        >
-          Get Started
-        </Button>
+        {!user && (
+          <Button
+            variant="outline"
+            onClick={() => setLocation("/register")}
+            className="rounded-full border-slate-200 dark:border-slate-700 hover:bg-[#F5F5F7] dark:hover:bg-slate-800 text-[#1d1d1f] dark:text-white font-medium"
+          >
+            Get Started
+          </Button>
+        )}
         <ThemeToggle />
       </div>
 
@@ -312,72 +370,33 @@ export default function Login() {
               </div>
             </div>
 
-            <Tabs defaultValue="mobile" value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs defaultValue="email" value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-8 p-1 bg-[#F5F5F7] dark:bg-slate-800 rounded-2xl">
-                <TabsTrigger
-                  value="mobile"
-                  className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all"
-                >
-                  <Phone className="h-4 w-4 mr-2" /> Mobile
-                </TabsTrigger>
                 <TabsTrigger
                   value="email"
                   className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all"
                 >
-                  <Mail className="h-4 w-4 mr-2" /> Email
+                  <Mail className="h-4 w-4 mr-2" /> Password
+                </TabsTrigger>
+                <TabsTrigger
+                  value="emailOtp"
+                  className="rounded-xl data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all"
+                >
+                  <Mail className="h-4 w-4 mr-2" /> Email OTP
                 </TabsTrigger>
               </TabsList>
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                <TabsContent value="mobile" className="space-y-4 mt-0">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Mobile Number</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      placeholder="Enter 10-digit number"
-                      value={formData.phone}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        setFormData({ ...formData, phone: value });
-                      }}
-                      required={activeTab === "mobile"}
-                      maxLength={10}
-                      pattern="[0-9]{10}"
-                      className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mobile-password" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="mobile-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter password"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    </div>
-                  </div>
-                </TabsContent>
-
+                {/* Email & Password Tab (Primary Login) */}
                 <TabsContent value="email" className="space-y-4 mt-0">
                   <div className="space-y-2">
-                    <Label htmlFor="username" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Username or Email</Label>
+                    <Label htmlFor="email" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Email Address</Label>
                     <Input
-                      id="username"
-                      type="text"
-                      placeholder="Enter username or email"
-                      value={formData.username}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      id="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required={activeTab === "email"}
                       className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
                     />
@@ -393,7 +412,7 @@ export default function Login() {
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Enter password"
+                        placeholder="Enter your password"
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         required={activeTab === "email"}
@@ -410,33 +429,34 @@ export default function Login() {
                   </div>
                 </TabsContent>
 
+                {/* Email OTP Tab (Passwordless Email Login) */}
+                <TabsContent value="emailOtp" className="space-y-4 mt-0">
+                  <div className="space-y-2">
+                    <Label htmlFor="emailOtp" className="text-sm font-semibold text-[#1d1d1f] dark:text-white ml-1">Email Address</Label>
+                    <Input
+                      id="emailOtp"
+                      type="email"
+                      placeholder="Enter your registered email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      required={activeTab === "emailOtp"}
+                      className="h-12 rounded-xl bg-[#F5F5F7] dark:bg-slate-800 border-transparent focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all"
+                    />
+                    <p className="text-xs text-[#86868b] ml-1">
+                      A passwordless OTP will be sent to your registered email address
+                    </p>
+                  </div>
+                </TabsContent>
+
                 <Button
                   type="submit"
                   className="w-full h-12 rounded-full bg-[#0071e3] hover:bg-[#0077ED] text-white font-semibold shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Processing..." : (activeTab === "mobile" ? "Send OTP" : "Login")}
+                  {isLoading ? "Processing..." : (activeTab === "emailOtp" ? "Send OTP" : "Login")}
                 </Button>
               </form>
             </Tabs>
-
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white dark:bg-slate-900 px-2 text-[#86868b]">Or continue with</span>
-              </div>
-            </div>
-
-            <Button
-              variant="outline"
-              className="w-full h-12 rounded-full border-slate-200 dark:border-slate-700 hover:bg-[#F5F5F7] dark:hover:bg-slate-800 text-[#1d1d1f] dark:text-white font-medium transition-all"
-              onClick={handleGoogleLogin}
-            >
-              <SiGoogle className="h-5 w-5 mr-2" />
-              Google
-            </Button>
 
             <div className="mt-8 text-center">
               <p className="text-[#86868b]">
@@ -457,7 +477,7 @@ export default function Login() {
           onClose={() => {
             setShowOTP(false);
             setTempUser(null);
-            setFormData({ username: "", password: "", phone: "", email: "" });
+            setFormData({ email: "", password: "", phone: "" });
           }}
           onVerify={handleOTPVerify}
           phone={tempUser.phone}
