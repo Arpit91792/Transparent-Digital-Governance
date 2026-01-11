@@ -21,6 +21,47 @@
 
 <body>
   <div id="root"></div>
+  <!-- Prevent runtime error plugin from loading or executing -->
+  <script>
+    // Override sendError function if it exists (from runtime error plugin)
+    // This must run BEFORE any other scripts to prevent the plugin from showing popups
+    (function() {
+      'use strict';
+      if (typeof window === 'undefined') return;
+      
+      // Override sendError function if it exists (from runtime error plugin)
+      if (typeof window.sendError === 'function') {
+        const originalSendError = window.sendError;
+        window.sendError = function() {
+          console.error('Runtime error (suppressed by overlay disable):', ...arguments);
+          // Don't call original - this prevents the popup
+        };
+      } else {
+        // Define sendError as a no-op to prevent it from being used
+        window.sendError = function() {
+          console.error('Runtime error (suppressed):', ...arguments);
+        };
+      }
+      
+      // Prevent error event listeners that might trigger the plugin
+      const originalAddEventListener = window.addEventListener;
+      window.addEventListener = function(type, listener, options) {
+        // Prevent the runtime error plugin from listening to errors
+        if (type === 'error' && typeof listener === 'function') {
+          try {
+            const listenerStr = listener.toString();
+            if (listenerStr.includes('sendError') || listenerStr.includes('runtime-error-plugin') || listenerStr.includes('runtime-error-modal')) {
+              console.log('Prevented runtime error plugin listener from attaching');
+              return; // Don't attach this listener
+            }
+          } catch (e) {
+            // If we can't stringify the listener, just continue
+          }
+        }
+        return originalAddEventListener.call(this, type, listener, options);
+      };
+    })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

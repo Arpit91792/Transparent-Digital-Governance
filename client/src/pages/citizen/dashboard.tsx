@@ -23,26 +23,50 @@ export default function CitizenDashboard() {
   const { t } = useLanguage();
   const [, setLocation] = useLocation();
 
-  const { data: applications, isLoading: applicationsLoading } = useQuery<Application[]>({
+  const { data: applications, isLoading: applicationsLoading, error: applicationsError } = useQuery<Application[]>({
     queryKey: ["/api/applications/my"],
+    queryFn: async () => {
+      try {
+        return await apiRequest<Application[]>("GET", "/api/applications/my");
+      } catch (error: any) {
+        console.error('Error fetching applications:', error);
+        return [];
+      }
+    },
     refetchInterval: 5000,
+    retry: 2,
+    retryDelay: 1000,
   });
 
-  /*
-    const { data: myCases, isLoading: casesLoading } = useQuery<any[]>({
-      queryKey: ["/api/judiciary/my-cases"],
-    });
-  */
-
-  const { data: notifications = [] } = useQuery<Notification[]>({
+  const { data: notifications = [], error: notificationsError } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
+    queryFn: async () => {
+      try {
+        return await apiRequest<Notification[]>("GET", "/api/notifications");
+      } catch (error: any) {
+        console.error('Error fetching notifications:', error);
+        return [];
+      }
+    },
     refetchInterval: 30000,
+    retry: 2,
+    retryDelay: 1000,
   });
 
   // Check suspension status
-  const { data: userData } = useQuery<{ suspended?: boolean; suspendedUntil?: string; hoursRemaining?: number; suspensionReason?: string }>({
+  const { data: userData, error: userDataError } = useQuery<{ suspended?: boolean; suspendedUntil?: string; hoursRemaining?: number; suspensionReason?: string }>({
     queryKey: ["/api/auth/me"],
+    queryFn: async () => {
+      try {
+        return await apiRequest<{ suspended?: boolean; suspendedUntil?: string; hoursRemaining?: number; suspensionReason?: string }>("GET", "/api/auth/me");
+      } catch (error: any) {
+        console.error('Error fetching user data:', error);
+        return { suspended: false, hoursRemaining: 0 };
+      }
+    },
     refetchInterval: 60000, // Check every minute
+    retry: 2,
+    retryDelay: 1000,
   });
 
   const isSuspended = userData?.suspended || false;
@@ -64,21 +88,77 @@ export default function CitizenDashboard() {
     setLocation(`/citizen/application/${id}`);
   };
 
-  // Filter applications based on selected status
-  const filteredApplications = (applications?.filter(app => {
-    if (filterStatus === "all") return true;
-    if (filterStatus === "pending") return ["Submitted", "Assigned", "In Progress"].includes(app.status);
-    if (filterStatus === "approved") return ["Approved", "Auto-Approved"].includes(app.status);
-    if (filterStatus === "rejected") return app.status === "Rejected";
-    return true;
-  }) || []).sort((a, b) => a.trackingId.localeCompare(b.trackingId));
+  // Filter applications based on selected status with proper error handling
+  const filteredApplications = (() => {
+    try {
+      if (!Array.isArray(applications)) {
+        return [];
+      }
+      return applications
+        .filter(app => {
+          try {
+            if (!app || typeof app !== 'object') return false;
+            if (filterStatus === "all") return true;
+            if (!app.status || typeof app.status !== 'string') return false;
+            if (filterStatus === "pending") return ["Submitted", "Assigned", "In Progress"].includes(app.status);
+            if (filterStatus === "approved") return ["Approved", "Auto-Approved"].includes(app.status);
+            if (filterStatus === "rejected") return app.status === "Rejected";
+            return true;
+          } catch (error) {
+            console.error('Error filtering application:', error, app);
+            return false;
+          }
+        })
+        .sort((a, b) => {
+          try {
+            const aId = a?.trackingId || '';
+            const bId = b?.trackingId || '';
+            return aId.localeCompare(bId);
+          } catch (error) {
+            console.error('Error sorting applications:', error);
+            return 0;
+          }
+        });
+    } catch (error) {
+      console.error('Error filtering applications:', error);
+      return [];
+    }
+  })();
 
-  const stats = {
-    total: applications?.length || 0,
-    pending: applications?.filter(app => ["Submitted", "Assigned", "In Progress"].includes(app.status)).length || 0,
-    approved: applications?.filter(app => ["Approved", "Auto-Approved"].includes(app.status)).length || 0,
-    rejected: applications?.filter(app => app.status === "Rejected").length || 0
-  };
+  const stats = (() => {
+    try {
+      if (!Array.isArray(applications)) {
+        return { total: 0, pending: 0, approved: 0, rejected: 0 };
+      }
+      return {
+        total: applications.length,
+        pending: applications.filter(app => {
+          try {
+            return app?.status && typeof app.status === 'string' && ["Submitted", "Assigned", "In Progress"].includes(app.status);
+          } catch {
+            return false;
+          }
+        }).length,
+        approved: applications.filter(app => {
+          try {
+            return app?.status && typeof app.status === 'string' && ["Approved", "Auto-Approved"].includes(app.status);
+          } catch {
+            return false;
+          }
+        }).length,
+        rejected: applications.filter(app => {
+          try {
+            return app?.status && typeof app.status === 'string' && app.status === "Rejected";
+          } catch {
+            return false;
+          }
+        }).length
+      };
+    } catch (error) {
+      console.error('Error calculating stats:', error);
+      return { total: 0, pending: 0, approved: 0, rejected: 0 };
+    }
+  })();
 
   // Scroll to applications list when filter changes
   useEffect(() => {

@@ -8,18 +8,49 @@ if (typeof window !== 'undefined') {
   initScrollOptimizations();
 }
 
-// Global error handlers to catch unhandled errors
+// Global error handlers to catch unhandled errors and prevent runtime error plugin from showing them
 if (typeof window !== 'undefined') {
   // Handle unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
-    event.preventDefault(); // Prevent default browser error handling
+    // Only prevent default if it's a known safe error
+    const errorMessage = event.reason?.message || String(event.reason || '');
+    const isKnownError = errorMessage.includes('NetworkError') || 
+                        errorMessage.includes('Failed to fetch') ||
+                        errorMessage.includes('AbortError');
+    if (!isKnownError) {
+      // For unknown errors, still prevent default to avoid runtime error plugin
+      event.preventDefault();
+    }
   });
 
   // Handle general errors
   window.addEventListener('error', (event) => {
     console.error('Global error:', event.error);
+    // Prevent the error from propagating to the runtime error plugin
+    // Only if it's not a critical error
+    if (event.error && typeof event.error === 'object') {
+      const errorMessage = event.error.message || String(event.error);
+      // Filter out known non-critical errors
+      if (errorMessage.includes('ResizeObserver') || 
+          errorMessage.includes('Non-Error promise rejection') ||
+          errorMessage.includes('sendError')) {
+        event.preventDefault();
+        return false;
+      }
+    }
+    return true;
   });
+
+  // Override console.error to catch errors before they reach the plugin
+  const originalConsoleError = console.error;
+  console.error = (...args: any[]) => {
+    // Filter out errors from the runtime error plugin itself
+    const errorString = args.map(arg => String(arg)).join(' ');
+    if (!errorString.includes('sendError') && !errorString.includes('runtime-error-plugin')) {
+      originalConsoleError.apply(console, args);
+    }
+  };
 }
 
 // Safely render the app

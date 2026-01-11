@@ -1811,11 +1811,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // --- New Routes for Department & Official Management ---
 
   // Get all departments
-  app.get("/api/departments", async (req: Request, res: Response) => {
+  // Get departments with role-based access control
+  // - Super Admin (department === "Administration" or username === "admin"): sees ALL departments
+  // - Regular Admin: sees ONLY their assigned department
+  // - Non-admins: 403 Forbidden
+  app.get("/api/departments", authenticateToken, async (req: Request, res: Response) => {
     try {
-      const departments = await storage.getAllDepartments();
-      res.json(departments);
+      // Only admins can access departments
+      if (!req.user || req.user.role !== "admin") {
+        return res.status(403).json({ error: "Insufficient permissions. Admin access required." });
+      }
+
+      // Fetch full user data to get department information
+      const fullUser = await storage.getUser(req.user.id);
+      if (!fullUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Check if user is super admin
+      // Super admin: department === "Administration" OR username === "admin"
+      const isSuperAdmin = fullUser.department === "Administration" || fullUser.username === "admin";
+
+      if (isSuperAdmin) {
+        // Super admin sees ALL departments
+        const allDepartments = await storage.getAllDepartments();
+        res.json(allDepartments);
+      } else {
+        // Regular admin sees ONLY their assigned department
+        if (!fullUser.department) {
+          return res.status(403).json({ 
+            error: "No department assigned. Please contact system administrator." 
+          });
+        }
+
+        // Find the department that matches the admin's assigned department
+        const allDepartments = await storage.getAllDepartments();
+        const adminDepartment = allDepartments.find(dept => {
+          // Match by department name (handle full names like "Health – Ministry of Health...")
+          const deptName = dept.name.split('–')[0].trim();
+          const userDept = fullUser.department.split('–')[0].trim();
+          return deptName === userDept || dept.name === fullUser.department;
+        });
+
+        if (!adminDepartment) {
+          // Admin's department doesn't exist in the system
+          return res.json([]);
+        }
+
+        // Return only the admin's assigned department
+        res.json([adminDepartment]);
+      }
     } catch (error: any) {
+      console.error("Error fetching departments:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -2515,10 +2562,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get department details (officials, applications, stats) - for admin dashboard
+  // - Super Admin: can access ANY department
+  // - Regular Admin: can ONLY access their assigned department
   app.get("/api/admin/department/:departmentName", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
     try {
+      // Fetch full user data to get department information
+      const fullUser = await storage.getUser(req.user!.id);
+      if (!fullUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Check if user is super admin
+      // Super admin: department === "Administration" OR username === "admin"
+      const isSuperAdmin = fullUser.department === "Administration" || fullUser.username === "admin";
+
       const departmentName = decodeURIComponent(req.params.departmentName);
       const normalizedDept = departmentName.split('–')[0].trim();
+
+      // RBAC: Regular admins can only access their assigned department
+      if (!isSuperAdmin) {
+        if (!fullUser.department) {
+          return res.status(403).json({ 
+            error: "No department assigned. Please contact system administrator." 
+          });
+        }
+
+        // Check if the requested department matches the admin's assigned department
+        const userDept = fullUser.department.split('–')[0].trim();
+        if (normalizedDept !== userDept && departmentName !== fullUser.department) {
+          return res.status(403).json({ 
+            error: "Access denied. You can only access your assigned department." 
+          });
+        }
+      }
 
       // Get all applications for this department
       const allApps = await storage.getAllApplications();
@@ -2737,6 +2813,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("AI monitoring error:", error);
     }
   }, 60 * 60 * 1000);
+
+  // Delete all user accounts (all accounts from all dashboards)
+  app.post("/api/admin/delete-all-users", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      console.log("⚠️  Deleting all user accounts as requested by admin...");
+      const deletedCount = await storage.deleteAllUsers();
+      res.json({ 
+        message: `Successfully deleted ${deletedCount} user account(s) from all dashboards`,
+        deletedCount 
+      });
+    } catch (error: any) {
+      console.error("Error deleting user accounts:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete all accounts and all associated details (comprehensive deletion)
+  app.post("/api/admin/delete-all-accounts-and-details", authenticateToken, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      console.log("⚠️  Deleting all accounts and all associated details as requested by admin...");
+      const deletionResult = await storage.deleteAllAccountsAndDetails();
+      res.json({ 
+        message: "Successfully deleted all accounts and all associated details",
+        ...deletionResult
+      });
+    } catch (error: any) {
+      console.error("Error deleting accounts and details:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   // Clear all data endpoint (for development/testing - use with caution!)
   app.post("/api/admin/clear-all-data", async (req: Request, res: Response) => {

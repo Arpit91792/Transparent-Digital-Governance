@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,76 @@ export default function SubmitApplication() {
 
   const isSuspended = userData?.suspended || false;
   const hoursRemaining = userData?.hoursRemaining || 0;
+
+  // Memoize sub-departments to avoid recalculating on every render
+  const subDepartments = useMemo(() => {
+    try {
+      if (!formData.department || typeof formData.department !== 'string' || formData.department.trim() === '') {
+        return [];
+      }
+      const depts = getSubDepartmentsForDepartment(formData.department);
+      if (!Array.isArray(depts)) {
+        console.warn('getSubDepartmentsForDepartment returned non-array:', depts);
+        return [];
+      }
+      return depts.filter(subDept => {
+        try {
+          return subDept && 
+                 typeof subDept === 'object' && 
+                 subDept.name && 
+                 typeof subDept.name === 'string' &&
+                 subDept.name.trim() !== '';
+        } catch (error) {
+          console.error('Error filtering sub-department:', error, subDept);
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('Error getting sub-departments:', error, formData.department);
+      return [];
+    }
+  }, [formData.department]);
+
+  // Compute valid Select value for subDepartment
+  const validSubDepartmentValue = useMemo(() => {
+    try {
+      const currentValue = formData.subDepartment;
+      if (!currentValue || typeof currentValue !== 'string' || currentValue.trim() === '') {
+        return "";
+      }
+      if (!Array.isArray(subDepartments) || subDepartments.length === 0) {
+        return "";
+      }
+      // Validate current value is still valid
+      const isValid = subDepartments.some(d => {
+        try {
+          return d && typeof d === 'object' && d.name && typeof d.name === 'string' && d.name === currentValue;
+        } catch {
+          return false;
+        }
+      });
+      return isValid ? currentValue : "";
+    } catch (error) {
+      console.error('Error computing valid subDepartment value:', error);
+      return "";
+    }
+  }, [formData.subDepartment, subDepartments]);
+
+  // Reset subDepartment if it's no longer valid for the current department
+  useEffect(() => {
+    try {
+      if (validSubDepartmentValue === "" && formData.subDepartment && formData.subDepartment.trim() !== '') {
+        // Current value is invalid, reset it
+        setFormData(prev => ({ ...prev, subDepartment: "" }));
+      }
+    } catch (error) {
+      console.error('Error in subDepartment validation useEffect:', error);
+      // Reset on error to prevent invalid state
+      if (formData.subDepartment) {
+        setFormData(prev => ({ ...prev, subDepartment: "" }));
+      }
+    }
+  }, [validSubDepartmentValue, formData.subDepartment]);
 
   const handleMarkAsRead = async (id: string) => {
     await apiRequest("POST", `/api/notifications/${id}/read`, {});
@@ -257,7 +327,20 @@ export default function SubmitApplication() {
     }
   };
 
-  const departments = getAllDepartmentNames();
+  // Safely get departments with error handling
+  const departments = (() => {
+    try {
+      const depts = getAllDepartmentNames();
+      if (!Array.isArray(depts)) {
+        console.error('getAllDepartmentNames returned non-array:', depts);
+        return [];
+      }
+      return depts.filter(dept => dept && typeof dept === 'string' && dept.trim() !== '');
+    } catch (error) {
+      console.error('Error getting department names:', error);
+      return [];
+    }
+  })();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -419,40 +502,201 @@ export default function SubmitApplication() {
                   <div className="space-y-3">
                     <Label htmlFor="department" className="text-sm font-semibold text-[#1d1d1f] dark:text-white">Department *</Label>
                     <Select
-                      value={formData.department}
-                      onValueChange={(value) => setFormData({ ...formData, department: value, subDepartment: "" })}
+                      value={formData.department || ""}
+                      onValueChange={(value) => {
+                        try {
+                          if (!value || typeof value !== 'string' || value.trim() === '') {
+                            // Empty value - reset department and subDepartment
+                            setFormData(prev => ({ ...prev, department: "", subDepartment: "" }));
+                            return;
+                          }
+
+                          // Validate that the value is in the valid list
+                          if (!departments || !Array.isArray(departments) || departments.length === 0) {
+                            console.error('departments is not a valid array:', departments);
+                            toast({
+                              title: "Error",
+                              description: "Unable to load departments. Please refresh the page.",
+                              variant: "destructive",
+                            });
+                            // Reset on error to prevent invalid state
+                            setFormData(prev => ({ ...prev, department: "", subDepartment: "" }));
+                            return;
+                          }
+
+                          // Safely check if value is in departments array
+                          const isValid = (() => {
+                            try {
+                              return Array.isArray(departments) && departments.includes(value);
+                            } catch (error) {
+                              console.error('Error validating department:', error);
+                              return false;
+                            }
+                          })();
+                          if (isValid) {
+                            // Reset subDepartment when department changes
+                            setFormData(prev => ({ ...prev, department: value, subDepartment: "" }));
+                          } else {
+                            console.warn('Invalid department value:', value);
+                            toast({
+                              title: "Invalid Selection",
+                              description: "Please select a valid department.",
+                              variant: "destructive",
+                            });
+                            // Reset on invalid selection
+                            setFormData(prev => ({ ...prev, department: "", subDepartment: "" }));
+                          }
+                        } catch (error: any) {
+                          console.error('Error updating department:', error);
+                          toast({
+                            title: "Error",
+                            description: error?.message || "Failed to update department. Please try again.",
+                            variant: "destructive",
+                          });
+                          // Reset on error to prevent invalid state
+                          setFormData(prev => ({ ...prev, department: "", subDepartment: "" }));
+                        }
+                      }}
                       required
                     >
                       <SelectTrigger className="h-12 rounded-xl border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-0" data-testid="select-department">
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>
                       <SelectContent>
-                        {departments.map(dept => (
-                          <SelectItem key={dept} value={dept}>
-                            {dept}
-                          </SelectItem>
-                        ))}
+                        {Array.isArray(departments) && departments.length > 0 ? (
+                          departments.map((dept, index) => {
+                            try {
+                              if (!dept || typeof dept !== 'string' || dept.trim() === '') {
+                                return null;
+                              }
+                              return (
+                                <SelectItem key={`dept-${index}-${dept}`} value={dept}>
+                                  {dept}
+                                </SelectItem>
+                              );
+                            } catch (error) {
+                              console.error('Error rendering department option:', error, dept);
+                              return null;
+                            }
+                          }).filter(Boolean)
+                        ) : (
+                          <SelectItem value="" disabled>No departments available</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {formData.department && (
+                  {formData.department && Array.isArray(subDepartments) && subDepartments.length > 0 && (
                     <div className="space-y-3 animate-in fade-in slide-in-from-left-2 duration-300">
                       <Label htmlFor="subDepartment" className="text-sm font-semibold text-[#1d1d1f] dark:text-white">Issue Type *</Label>
                       <Select
-                        value={formData.subDepartment}
-                        onValueChange={(value) => setFormData({ ...formData, subDepartment: value })}
+                        key={`sub-dept-select-${formData.department}`}
+                        value={validSubDepartmentValue}
+                        onValueChange={(value) => {
+                          try {
+                            if (!value || typeof value !== 'string' || value.trim() === '') {
+                              // Empty value - reset subDepartment
+                              setFormData(prev => ({ ...prev, subDepartment: "" }));
+                              return;
+                            }
+
+                            // Validate that the value is in the valid list
+                            if (!Array.isArray(subDepartments)) {
+                              console.error('subDepartments is not an array:', subDepartments);
+                              toast({
+                                title: "Error",
+                                description: "Unable to load issue types. Please try again.",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+
+                            const isValid = subDepartments.some(d => {
+                              try {
+                                return d && typeof d === 'object' && d.name && typeof d.name === 'string' && d.name === value;
+                              } catch (error) {
+                                console.error('Error validating subDepartment:', error, d);
+                                return false;
+                              }
+                            });
+
+                            if (isValid) {
+                              setFormData(prev => ({ ...prev, subDepartment: value }));
+                            } else {
+                              // Safely get available names for logging
+                              const availableNames = (() => {
+                                try {
+                                  if (!Array.isArray(subDepartments)) return [];
+                                  return subDepartments
+                                    .filter(d => d && typeof d === 'object' && d.name && typeof d.name === 'string')
+                                    .map(d => d.name);
+                                } catch (error) {
+                                  console.error('Error getting available names:', error);
+                                  return [];
+                                }
+                              })();
+                              console.warn('Invalid subDepartment value:', value, 'Available:', availableNames);
+                              toast({
+                                title: "Invalid Selection",
+                                description: "Please select a valid issue type.",
+                                variant: "destructive",
+                              });
+                              // Reset to empty value on invalid selection
+                              setFormData(prev => ({ ...prev, subDepartment: "" }));
+                            }
+                          } catch (error: any) {
+                            console.error('Error updating subDepartment:', error);
+                            toast({
+                              title: "Error",
+                              description: error?.message || "Failed to update issue type. Please try again.",
+                              variant: "destructive",
+                            });
+                            // Reset on error to prevent invalid state
+                            setFormData(prev => ({ ...prev, subDepartment: "" }));
+                          }
+                        }}
                         required
                       >
                         <SelectTrigger className="h-12 rounded-xl border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-0" data-testid="select-sub-department">
                           <SelectValue placeholder="Select specific issue" />
                         </SelectTrigger>
                         <SelectContent>
-                          {getSubDepartmentsForDepartment(formData.department).map(subDept => (
-                            <SelectItem key={subDept.name} value={subDept.name}>
-                              {subDept.name}
-                            </SelectItem>
-                          ))}
+                          {(() => {
+                            try {
+                              if (!Array.isArray(subDepartments) || subDepartments.length === 0) {
+                                return <SelectItem value="" disabled>No issues available</SelectItem>;
+                              }
+                              
+                              const validOptions: JSX.Element[] = [];
+                              subDepartments.forEach((subDept, index) => {
+                                try {
+                                  if (!subDept || typeof subDept !== 'object') {
+                                    return;
+                                  }
+                                  const name = subDept?.name;
+                                  if (!name || typeof name !== 'string' || name.trim() === '') {
+                                    return;
+                                  }
+                                  validOptions.push(
+                                    <SelectItem key={`sub-dept-${formData.department}-${index}-${name}`} value={name}>
+                                      {name}
+                                    </SelectItem>
+                                  );
+                                } catch (error) {
+                                  console.error('Error rendering subDepartment option:', error, subDept);
+                                }
+                              });
+                              
+                              if (validOptions.length === 0) {
+                                return <SelectItem value="" disabled>No issues available</SelectItem>;
+                              }
+                              
+                              return validOptions;
+                            } catch (error) {
+                              console.error('Error rendering SelectContent:', error);
+                              return <SelectItem value="" disabled>Error loading issues</SelectItem>;
+                            }
+                          })()}
                         </SelectContent>
                       </Select>
                     </div>

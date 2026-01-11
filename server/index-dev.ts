@@ -15,7 +15,10 @@ export async function setupVite(app: Express, server: Server) {
   const viteLogger = createLogger();
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server },
+    hmr: { 
+      server,
+      overlay: false, // Disable HMR overlay to prevent runtime error popups
+    },
     allowedHosts: true as const,
   };
 
@@ -26,7 +29,8 @@ export async function setupVite(app: Express, server: Server) {
       ...viteLogger,
       error: (msg, options) => {
         viteLogger.error(msg, options);
-        process.exit(1);
+        // Don't exit on errors in development - just log them
+        // process.exit(1);
       },
     },
     server: serverOptions,

@@ -420,6 +420,69 @@ export class MongoDBStorage implements IStorage {
     return app;
   }
 
+  async deleteAllUsers(): Promise<number> {
+    console.log("🗑️  Deleting all user accounts from database...");
+    const result = await UserModel.deleteMany({});
+    const deletedCount = result.deletedCount || 0;
+    console.log(`✅ Successfully deleted ${deletedCount} user account(s) from all dashboards`);
+    return deletedCount;
+  }
+
+  async deleteAllAccountsAndDetails(): Promise<{
+    usersDeleted: number;
+    applicationsDeleted: number;
+    feedbackDeleted: number;
+    notificationsDeleted: number;
+    warningsDeleted: number;
+    otpRecordsDeleted: number;
+    blockchainHashesDeleted: number;
+    applicationHistoryDeleted: number;
+    applicationLocationHistoryDeleted: number;
+  }> {
+    console.log("🗑️  Deleting all accounts and all associated details from database...");
+    
+    // Delete all user-related data in parallel
+    const [usersResult, applicationsResult, feedbackResult, notificationsResult, warningsResult, otpResult, blockchainResult, historyResult] = await Promise.all([
+      UserModel.deleteMany({}),
+      ApplicationModel.deleteMany({}),
+      FeedbackModel.deleteMany({}),
+      NotificationModel.deleteMany({}),
+      WarningModel.deleteMany({}),
+      OTPRecordModel.deleteMany({}),
+      BlockchainHashModel.deleteMany({}),
+      ApplicationHistoryModel.deleteMany({})
+    ]);
+    
+    // Note: ApplicationLocationHistory is not implemented in MongoDB storage
+    // Setting to 0 for consistency with the return type
+    const locationHistoryResult = { deletedCount: 0 };
+    
+    const result = {
+      usersDeleted: usersResult.deletedCount || 0,
+      applicationsDeleted: applicationsResult.deletedCount || 0,
+      feedbackDeleted: feedbackResult.deletedCount || 0,
+      notificationsDeleted: notificationsResult.deletedCount || 0,
+      warningsDeleted: warningsResult.deletedCount || 0,
+      otpRecordsDeleted: otpResult.deletedCount || 0,
+      blockchainHashesDeleted: blockchainResult.deletedCount || 0,
+      applicationHistoryDeleted: historyResult.deletedCount || 0,
+      applicationLocationHistoryDeleted: locationHistoryResult.deletedCount || 0
+    };
+    
+    console.log(`✅ Successfully deleted all accounts and details:`);
+    console.log(`   - ${result.usersDeleted} user account(s)`);
+    console.log(`   - ${result.applicationsDeleted} application(s)`);
+    console.log(`   - ${result.feedbackDeleted} feedback/rating(s)`);
+    console.log(`   - ${result.notificationsDeleted} notification(s)`);
+    console.log(`   - ${result.warningsDeleted} warning(s)`);
+    console.log(`   - ${result.otpRecordsDeleted} OTP record(s)`);
+    console.log(`   - ${result.blockchainHashesDeleted} blockchain hash(es)`);
+    console.log(`   - ${result.applicationHistoryDeleted} application history record(s)`);
+    console.log(`   - ${result.applicationLocationHistoryDeleted} location history record(s)`);
+    
+    return result;
+  }
+
   async clearAllData(): Promise<void> {
     console.log("🗑️  Clearing all data from database...");
     await UserModel.deleteMany({});

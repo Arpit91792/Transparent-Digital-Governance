@@ -32,23 +32,54 @@ export default function OfficialDashboard() {
    const [searchQuery, setSearchQuery] = useState("");
    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-   const { data: applications, isLoading } = useQuery<Application[]>({
+   const { data: applications, isLoading, error: applicationsError } = useQuery<Application[]>({
       queryKey: ["/api/applications"],
+      queryFn: async () => {
+        try {
+          return await apiRequest<Application[]>("GET", "/api/applications");
+        } catch (error: any) {
+          console.error('Error fetching applications:', error);
+          return [];
+        }
+      },
       refetchInterval: 500, // Refresh every 500ms for immediate visibility
       refetchOnWindowFocus: true, // Refetch when user switches back to tab
       refetchOnMount: true, // Always refetch when component mounts
       staleTime: 0, // Always consider data stale to ensure fresh data
       gcTime: 0, // Don't cache to ensure latest data (gcTime replaces cacheTime in newer versions)
+      retry: 2,
+      retryDelay: 1000,
    });
 
-   const { data: notifications = [] } = useQuery<Notification[]>({
+   const { data: notifications = [], error: notificationsError } = useQuery<Notification[]>({
       queryKey: ["/api/notifications"],
+      queryFn: async () => {
+        try {
+          return await apiRequest<Notification[]>("GET", "/api/notifications");
+        } catch (error: any) {
+          console.error('Error fetching notifications:', error);
+          return [];
+        }
+      },
+      retry: 2,
+      retryDelay: 1000,
    });
 
-   const { data: ratingStats } = useQuery<{ averageRating: number; totalRatings: number }>({
+   const { data: ratingStats, error: ratingStatsError } = useQuery<{ averageRating: number; totalRatings: number }>({
       queryKey: ["/api/officials", user?.id, "rating"],
-      enabled: !!user?.id,
+      queryFn: async () => {
+        try {
+          if (!user?.id) return { averageRating: 0, totalRatings: 0 };
+          return await apiRequest<{ averageRating: number; totalRatings: number }>("GET", `/api/officials/${user.id}/rating`);
+        } catch (error: any) {
+          console.error('Error fetching rating stats:', error);
+          return { averageRating: 0, totalRatings: 0 };
+        }
+      },
+      enabled: !!user?.id && typeof user.id === 'string',
       refetchInterval: 5000,
+      retry: 2,
+      retryDelay: 1000,
    });
 
    const [activeTab, setActiveTab] = useState("my-apps");

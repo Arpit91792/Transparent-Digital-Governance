@@ -34,18 +34,42 @@ function ProtectedRoute({ component: Component, allowedRoles }: { component: Rea
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950">
+        <div className="text-center space-y-4">
+          <div className="h-8 w-8 border-4 border-[#0071e3] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-[#86868b]">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {
     return <Redirect to="/login" />;
   }
 
-  if (!allowedRoles.includes(user.role)) {
+  // Safely check user role with proper null/undefined handling
+  if (!user.role || typeof user.role !== 'string') {
+    console.error('User role is missing or invalid:', user);
+    return <Redirect to="/login" />;
+  }
+
+  if (!Array.isArray(allowedRoles) || !allowedRoles.includes(user.role)) {
     return <Redirect to="/" />;
   }
 
-  return <Component />;
+  try {
+    return <Component />;
+  } catch (error) {
+    console.error('Error rendering protected component:', error);
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F7] dark:bg-slate-950">
+        <div className="text-center space-y-4">
+          <p className="text-red-500">Error loading dashboard. Please try refreshing the page.</p>
+        </div>
+      </div>
+    );
+  }
 }
 
 function Router() {

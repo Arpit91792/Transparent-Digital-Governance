@@ -96,6 +96,22 @@ export interface IStorage {
   suspendUser(userId: string, reason: string, hours: number): Promise<User>;
   isUserSuspended(userId: string): Promise<boolean>;
   updateUser(userId: string, updates: Partial<User>): Promise<User>;
+  
+  // Delete all users (all accounts from all dashboards)
+  deleteAllUsers(): Promise<number>; // Returns number of users deleted
+  
+  // Delete all accounts and all their details (comprehensive deletion)
+  deleteAllAccountsAndDetails(): Promise<{
+    usersDeleted: number;
+    applicationsDeleted: number;
+    feedbackDeleted: number;
+    notificationsDeleted: number;
+    warningsDeleted: number;
+    otpRecordsDeleted: number;
+    blockchainHashesDeleted: number;
+    applicationHistoryDeleted: number;
+    applicationLocationHistoryDeleted: number;
+  }>;
 }
 
 export class MemStorage implements IStorage {
@@ -1168,6 +1184,145 @@ export class MemStorage implements IStorage {
     }
 
     return true;
+  }
+
+  async deleteAllUsers(): Promise<number> {
+    console.log("🗑️  Deleting all user accounts...");
+    const userCount = this.users.size;
+    
+    // Clear all users from memory
+    this.users.clear();
+    
+    // Delete users.json file from disk
+    try {
+      const usersFile = path.join(this.dataDir, 'users.json');
+      if (fs.existsSync(usersFile)) {
+        fs.unlinkSync(usersFile);
+        console.log(`   Deleted users.json file`);
+      }
+      
+      // Save empty users map to disk (creates empty file)
+      const usersData = Object.fromEntries(this.users);
+      fs.writeFileSync(
+        path.join(this.dataDir, 'users.json'),
+        JSON.stringify(usersData, null, 2),
+        'utf-8'
+      );
+      
+      console.log(`✅ Successfully deleted ${userCount} user accounts from all dashboards`);
+      return userCount;
+    } catch (error) {
+      console.error("❌ Error deleting user accounts:", error);
+      throw error;
+    }
+  }
+
+  async deleteAllAccountsAndDetails(): Promise<{
+    usersDeleted: number;
+    applicationsDeleted: number;
+    feedbackDeleted: number;
+    notificationsDeleted: number;
+    warningsDeleted: number;
+    otpRecordsDeleted: number;
+    blockchainHashesDeleted: number;
+    applicationHistoryDeleted: number;
+    applicationLocationHistoryDeleted: number;
+  }> {
+    console.log("🗑️  Deleting all accounts and all associated details...");
+    
+    // Count items before deletion
+    const userCount = this.users.size;
+    const applicationCount = this.applications.size;
+    const feedbackCount = this.feedback.size;
+    const notificationCount = this.notifications.size;
+    const warningCount = this.warnings.size;
+    const otpCount = this.otpRecords.size;
+    const blockchainCount = this.blockchainHashes.size;
+    const historyCount = Array.from(this.applicationHistory.values()).reduce((sum, histories) => sum + histories.length, 0);
+    const locationHistoryCount = Array.from(this.applicationLocationHistory.values()).reduce((sum, histories) => sum + histories.length, 0);
+    
+    // Clear all user-related data from memory
+    this.users.clear();
+    this.applications.clear();
+    this.applicationHistory.clear();
+    this.applicationLocationHistory.clear();
+    this.feedback.clear();
+    this.otpRecords.clear();
+    this.blockchainHashes.clear();
+    this.notifications.clear();
+    this.warnings.clear();
+    
+    // Delete all related files from disk
+    try {
+      const filesToDelete = [
+        'users.json',
+        'applications.json',
+        'applicationHistory.json',
+        'applicationLocationHistory.json',
+        'feedback.json',
+        'otpRecords.json',
+        'blockchainHashes.json',
+        'notifications.json',
+        'warnings.json'
+      ];
+
+      for (const file of filesToDelete) {
+        const filePath = path.join(this.dataDir, file);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`   Deleted ${file}`);
+        }
+      }
+      
+      // Save empty maps to disk (creates empty files)
+      const usersData = Object.fromEntries(this.users);
+      const applicationsData = Object.fromEntries(this.applications);
+      const historyData = Object.fromEntries(this.applicationHistory);
+      const locationHistoryData = Object.fromEntries(this.applicationLocationHistory);
+      const feedbackData = Object.fromEntries(this.feedback);
+      const otpData = Object.fromEntries(this.otpRecords);
+      const blockchainData = Object.fromEntries(this.blockchainHashes);
+      const notificationsData = Object.fromEntries(this.notifications);
+      const warningsData = Object.fromEntries(this.warnings);
+      
+      fs.writeFileSync(path.join(this.dataDir, 'users.json'), JSON.stringify(usersData, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(this.dataDir, 'applications.json'), JSON.stringify(applicationsData, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(this.dataDir, 'applicationHistory.json'), JSON.stringify(historyData, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(this.dataDir, 'applicationLocationHistory.json'), JSON.stringify(locationHistoryData, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(this.dataDir, 'feedback.json'), JSON.stringify(feedbackData, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(this.dataDir, 'otpRecords.json'), JSON.stringify(otpData, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(this.dataDir, 'blockchainHashes.json'), JSON.stringify(blockchainData, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(this.dataDir, 'notifications.json'), JSON.stringify(notificationsData, null, 2), 'utf-8');
+      fs.writeFileSync(path.join(this.dataDir, 'warnings.json'), JSON.stringify(warningsData, null, 2), 'utf-8');
+      
+      const result = {
+        usersDeleted: userCount,
+        applicationsDeleted: applicationCount,
+        feedbackDeleted: feedbackCount,
+        notificationsDeleted: notificationCount,
+        warningsDeleted: warningCount,
+        otpRecordsDeleted: otpCount,
+        blockchainHashesDeleted: blockchainCount,
+        applicationHistoryDeleted: historyCount,
+        applicationLocationHistoryDeleted: locationHistoryCount
+      };
+      
+      console.log(`✅ Successfully deleted all accounts and details:`);
+      console.log(`   - ${userCount} user account(s)`);
+      console.log(`   - ${applicationCount} application(s)`);
+      console.log(`   - ${feedbackCount} feedback/rating(s)`);
+      console.log(`   - ${notificationCount} notification(s)`);
+      console.log(`   - ${warningCount} warning(s)`);
+      console.log(`   - ${otpCount} OTP record(s)`);
+      console.log(`   - ${blockchainCount} blockchain hash(es)`);
+      console.log(`   - ${historyCount} application history record(s)`);
+      console.log(`   - ${locationHistoryCount} location history record(s)`);
+      
+      return result;
+    } catch (error) {
+      console.error("❌ Error deleting accounts and details:", error);
+      throw error;
+    }
   }
 
   async clearAllData(): Promise<void> {

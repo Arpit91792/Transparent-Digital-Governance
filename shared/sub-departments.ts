@@ -363,15 +363,61 @@ export const DEPARTMENTS_WITH_SUB_DEPARTMENTS: DepartmentWithSubDepartments[] = 
 
 // Helper function to get sub-departments for a department
 export function getSubDepartmentsForDepartment(department: string): SubDepartment[] {
-  const deptData = DEPARTMENTS_WITH_SUB_DEPARTMENTS.find(
-    (d) => d.department === department
-  );
-  return deptData?.subDepartments || [];
+  try {
+    if (!department || typeof department !== 'string' || department.trim() === '') {
+      return [];
+    }
+    
+    if (!Array.isArray(DEPARTMENTS_WITH_SUB_DEPARTMENTS)) {
+      console.error('DEPARTMENTS_WITH_SUB_DEPARTMENTS is not an array');
+      return [];
+    }
+
+    const deptData = DEPARTMENTS_WITH_SUB_DEPARTMENTS.find(
+      (d) => d && typeof d === 'object' && d.department === department
+    );
+    
+    if (!deptData || !deptData.subDepartments) {
+      return [];
+    }
+
+    if (!Array.isArray(deptData.subDepartments)) {
+      console.error('subDepartments is not an array for department:', department);
+      return [];
+    }
+
+    return deptData.subDepartments;
+  } catch (error) {
+    console.error('Error getting sub-departments for department:', department, error);
+    return [];
+  }
 }
 
 // Helper function to get all department names
 export function getAllDepartmentNames(): string[] {
-  return DEPARTMENTS_WITH_SUB_DEPARTMENTS.map((d) => d.department);
+  try {
+    if (!Array.isArray(DEPARTMENTS_WITH_SUB_DEPARTMENTS)) {
+      console.error('DEPARTMENTS_WITH_SUB_DEPARTMENTS is not an array');
+      return [];
+    }
+
+    return DEPARTMENTS_WITH_SUB_DEPARTMENTS
+      .map((d) => {
+        try {
+          if (d && typeof d === 'object' && d.department && typeof d.department === 'string') {
+            return d.department;
+          }
+          return null;
+        } catch (error) {
+          console.error('Error mapping department:', error, d);
+          return null;
+        }
+      })
+      .filter((dept): dept is string => dept !== null && dept !== undefined && dept.trim() !== '');
+  } catch (error) {
+    console.error('Error getting all department names:', error);
+    return [];
+  }
 }
 
 

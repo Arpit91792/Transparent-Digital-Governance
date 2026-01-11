@@ -42,6 +42,7 @@ function ApplicationRowWithCitizen({
   officialId: string;
   onRowClick?: (app: Application) => void;
 }) {
+  const { t } = useLanguage();
   const { data: citizen } = useQuery<{ fullName: string } | null>({
     queryKey: ["/api/users", app.citizenId],
     enabled: !!app.citizenId,
@@ -104,7 +105,7 @@ export default function AdminDashboard() {
   const [isOfficialDetailOpen, setIsOfficialDetailOpen] = useState(false);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(user?.department || null);
 
-  const { data: deptStats } = useQuery<{
+  const { data: deptStats, error: deptStatsError } = useQuery<{
     totalApplications: number;
     assignedCount: number;
     approvedCount: number;
@@ -115,23 +116,81 @@ export default function AdminDashboard() {
     warningsSent: number;
   }>({
     queryKey: ["/api/admin/department-stats"],
-    enabled: !!user?.department,
+    queryFn: async () => {
+      try {
+        return await apiRequest<{
+          totalApplications: number;
+          assignedCount: number;
+          approvedCount: number;
+          rejectedCount: number;
+          pendingCount: number;
+          solvedCount: number;
+          unsolvedCount: number;
+          warningsSent: number;
+        }>("GET", "/api/admin/department-stats");
+      } catch (error: any) {
+        console.error('Error fetching department stats:', error);
+        return {
+          totalApplications: 0,
+          assignedCount: 0,
+          approvedCount: 0,
+          rejectedCount: 0,
+          pendingCount: 0,
+          solvedCount: 0,
+          unsolvedCount: 0,
+          warningsSent: 0,
+        };
+      }
+    },
+    enabled: !!user?.department && typeof user.department === 'string',
     refetchInterval: 5000,
+    retry: 2,
+    retryDelay: 1000,
   });
 
-  const { data: applications } = useQuery<Application[]>({
+  const { data: applications, error: applicationsError } = useQuery<Application[]>({
     queryKey: ["/api/applications"],
+    queryFn: async () => {
+      try {
+        return await apiRequest<Application[]>("GET", "/api/applications");
+      } catch (error: any) {
+        console.error('Error fetching applications:', error);
+        return [];
+      }
+    },
     refetchInterval: 5000,
+    retry: 2,
+    retryDelay: 1000,
   });
 
-  const { data: officials } = useQuery<UserType[]>({
+  const { data: officials, error: officialsError } = useQuery<UserType[]>({
     queryKey: ["/api/users/officials"],
+    queryFn: async () => {
+      try {
+        return await apiRequest<UserType[]>("GET", "/api/users/officials");
+      } catch (error: any) {
+        console.error('Error fetching officials:', error);
+        return [];
+      }
+    },
     refetchInterval: 5000,
+    retry: 2,
+    retryDelay: 1000,
   });
 
-  const { data: notifications = [] } = useQuery<Notification[]>({
+  const { data: notifications = [], error: notificationsError } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
+    queryFn: async () => {
+      try {
+        return await apiRequest<Notification[]>("GET", "/api/notifications");
+      } catch (error: any) {
+        console.error('Error fetching notifications:', error);
+        return [];
+      }
+    },
     refetchInterval: 30000,
+    retry: 2,
+    retryDelay: 1000,
   });
 
   const { data: departmentRating } = useQuery<{ averageRating: number; totalRatings: number; officialCount: number }>({
@@ -152,14 +211,37 @@ export default function AdminDashboard() {
     enabled: !!selectedOfficial,
   });
 
-  // Get all departments for department list view
-  const { data: departments } = useQuery<Array<{ id: string; name: string; description: string | null }>>({
+  // Check if user is super admin (for UI purposes)
+  const isSuperAdmin = user?.department === "Administration" || user?.username === "admin";
+
+  // Get departments with role-based access control
+  // - Super Admin: sees ALL departments
+  // - Regular Admin: sees ONLY their assigned department
+  // - Non-admins: query is disabled
+  const { data: departments, error: departmentsError, isLoading: departmentsLoading } = useQuery<Array<{ id: string; name: string; description: string | null }>>({
     queryKey: ["/api/departments"],
+    queryFn: async () => {
+      // Only fetch if user is admin
+      if (!user || user.role !== "admin") {
+        throw new Error("Insufficient permissions. Admin access required.");
+      }
+      return await apiRequest<Array<{ id: string; name: string; description: string | null }>>("GET", "/api/departments");
+    },
+    enabled: !!user && user.role === "admin", // Only fetch if user is admin
     refetchInterval: 10000,
+    retry: false, // Don't retry on 403 errors
   });
 
+  // Auto-select department for regular admins (they only have one department)
+  useEffect(() => {
+    if (departments && departments.length === 1 && !isSuperAdmin && !selectedDepartment) {
+      // Regular admin with only one department - auto-select it
+      setSelectedDepartment(departments[0].name);
+    }
+  }, [departments, isSuperAdmin, selectedDepartment]);
+
   // Get department details when a department is selected
-  const { data: departmentDetails } = useQuery<{
+  const { data: departmentDetails, error: departmentDetailsError } = useQuery<{
     department: string;
     officials: Array<UserType & { solvedCount: number; pendingCount: number; totalCount: number }>;
     stats: {
@@ -177,6 +259,7 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/department", selectedDepartment],
     enabled: !!selectedDepartment,
     refetchInterval: 5000,
+    retry: false, // Don't retry on 403 errors
   });
 
   const handleMarkAsRead = async (id: string) => {
@@ -284,8 +367,40 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {departments?.map((dept) => (
+              {departmentsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+                    <p className="mt-4 text-[#86868b]">Loading departments...</p>
+                  </div>
+                </div>
+              ) : departmentsError ? (
+                <div className="flex items-center justify-center py-12">
+                  <Card className="p-6">
+                    <CardContent className="text-center">
+                      <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                      <h3 className="font-bold text-[#1d1d1f] dark:text-white mb-2">Error Loading Departments</h3>
+                      <p className="text-[#86868b]">
+                        {(departmentsError as Error)?.message || "Failed to load departments. Please try again."}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : !departments || departments.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <Card className="p-6">
+                    <CardContent className="text-center">
+                      <Building2 className="h-12 w-12 text-[#86868b] mx-auto mb-4" />
+                      <h3 className="font-bold text-[#1d1d1f] dark:text-white mb-2">No Departments Available</h3>
+                      <p className="text-[#86868b]">
+                        You don't have access to any departments. Please contact your system administrator.
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {departments.map((dept) => (
                   <Card
                     key={dept.id}
                     onClick={() => setSelectedDepartment(dept.name)}
@@ -313,8 +428,9 @@ export default function AdminDashboard() {
                       )}
                     </CardContent>
                   </Card>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </>
           ) : (
             /* Department Detail View */
